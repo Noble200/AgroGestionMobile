@@ -1,28 +1,75 @@
-// src/contexts/AuthContext.js - ACTUALIZADO: Sin permisos automáticos
+// src/contexts/AuthContext.tsx - ACTUALIZADO: Sin permisos automáticos
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut,
-  onAuthStateChanged 
+  onAuthStateChanged,
+  User
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../api/firebase';
 import usersService from '../api/usersService';
 
-const AuthContext = createContext();
-
-export function useAuth() {
-  return useContext(AuthContext);
+// Tipos para AuthContext
+interface Permissions {
+  dashboard: boolean;
+  activities: boolean;
+  products: boolean;
+  transfers: boolean;
+  purchases: boolean;
+  expenses: boolean;
+  fumigations: boolean;
+  harvests: boolean;
+  fields: boolean;
+  warehouses: boolean;
+  reports: boolean;
+  users: boolean;
+  admin: boolean;
 }
 
-export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
+interface CurrentUser {
+  uid: string;
+  email: string | null;
+  username: string;
+  displayName: string;
+  emailVerified: boolean;
+  role: string;
+  permissions: Permissions;
+}
+
+interface AuthProviderProps {
+  children: React.ReactNode;
+}
+
+interface AuthContextType {
+  currentUser: CurrentUser | null;
+  login: (email: string, password: string) => Promise<any>;
+  loginWithUsername: (username: string, password: string) => Promise<any>;
+  logout: () => Promise<boolean>;
+  hasPermission: (permission: string) => boolean;
+  error: string;
+  setError: (error: string) => void;
+  loading: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // Función para crear permisos vacíos (sin permisos automáticos)
-  const createEmptyPermissions = () => {
+  const createEmptyPermissions = (): Permissions => {
     return {
       dashboard: false,
       activities: false,
@@ -40,24 +87,24 @@ export function AuthProvider({ children }) {
     };
   };
 
-  async function login(email, password) {
+  async function login(email: string, password: string) {
     try {
       setError('');
       const userData = await usersService.login(email, password);
       return userData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al iniciar sesión:', error);
       setError('Error al iniciar sesión: ' + error.message);
       throw error;
     }
   }
 
-  async function loginWithUsername(username, password) {
+  async function loginWithUsername(username: string, password: string) {
     try {
       setError('');
       const userData = await usersService.loginWithUsername(username, password);
       return userData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al iniciar sesión con nombre de usuario:', error);
       setError('Error al iniciar sesión: ' + error.message);
       throw error;
@@ -69,7 +116,7 @@ export function AuthProvider({ children }) {
       setError('');
       await usersService.logout();
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cerrar sesión:', error);
       setError('Error al cerrar sesión: ' + error.message);
       throw error;
@@ -77,7 +124,7 @@ export function AuthProvider({ children }) {
   }
 
   // ACTUALIZADO: Verificar permisos sin automáticos
-  function hasPermission(permission) {
+  function hasPermission(permission: string): boolean {
     if (!currentUser || !currentUser.permissions) return false;
     
     // Los administradores tienen todos los permisos
@@ -86,21 +133,21 @@ export function AuthProvider({ children }) {
     }
     
     // Verificar permiso específico (debe estar explícitamente en true)
-    return currentUser.permissions[permission] === true;
+    return currentUser.permissions[permission as keyof Permissions] === true;
   }
 
   useEffect(() => {
     setLoading(true);
     console.log('Inicializando contexto de autenticación...');
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
       try {
         if (user) {
           console.log('Usuario autenticado detectado:', user.email);
           
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           
-          let userData = {};
+          let userData: any = {};
           if (userDoc.exists()) {
             userData = userDoc.data();
           }
@@ -113,8 +160,8 @@ export function AuthProvider({ children }) {
           setCurrentUser({
             uid: user.uid,
             email: user.email,
-            username: userData.username || user.email.split('@')[0],
-            displayName: userData.displayName || userData.username || user.email.split('@')[0],
+            username: userData.username || user.email?.split('@')[0] || '',
+            displayName: userData.displayName || userData.username || user.email?.split('@')[0] || '',
             emailVerified: user.emailVerified,
             role: userData.role || 'user',
             permissions: permissions // Solo los permisos asignados explícitamente
@@ -123,7 +170,7 @@ export function AuthProvider({ children }) {
           console.log('No hay usuario autenticado, limpiando estado');
           setCurrentUser(null);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error al procesar cambio de autenticación:', error);
         setError('Error al obtener datos completos del usuario: ' + error.message);
       } finally {
@@ -137,7 +184,7 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const value = {
+  const value: AuthContextType = {
     currentUser,
     login,
     loginWithUsername,

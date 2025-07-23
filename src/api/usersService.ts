@@ -1,4 +1,4 @@
-// src/api/usersService.js - CORREGIDO sin permisos automáticos de actividades
+// src/api/usersService.ts - CORREGIDO con tipado completo
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -6,7 +6,8 @@ import {
   updateEmail,
   updatePassword,
   sendPasswordResetEmail,
-  onAuthStateChanged
+  onAuthStateChanged,
+  User
 } from 'firebase/auth';
 import { 
   doc, 
@@ -21,8 +22,39 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
+// Tipos para usersService
+interface Permissions {
+  dashboard: boolean;
+  activities: boolean;
+  products: boolean;
+  transfers: boolean;
+  purchases: boolean;
+  expenses: boolean;
+  fumigations: boolean;
+  harvests: boolean;
+  fields: boolean;
+  warehouses: boolean;
+  reports: boolean;
+  users: boolean;
+  admin: boolean;
+}
+
+interface UserData {
+  id?: string;
+  email: string;
+  username?: string;
+  displayName?: string;
+  role?: string;
+  permissions?: Permissions;
+  password?: string;
+  sendVerification?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+  [key: string]: any;
+}
+
 // CORREGIDO: Función para crear permisos mínimos (solo dashboard obligatorio)
-const createMinimalPermissions = () => {
+const createMinimalPermissions = (): Permissions => {
   return {
     dashboard: true, // SOLO este es obligatorio
     activities: false, // CORREGIDO: Por defecto false y NO obligatorio
@@ -41,7 +73,7 @@ const createMinimalPermissions = () => {
 };
 
 // Función para crear permisos por defecto según el rol (solo para referencia, NO automáticos)
-const createDefaultPermissions = (role = 'user') => {
+const createDefaultPermissions = (role: string = 'user'): Permissions => {
   switch (role) {
     case 'admin':
       return {
@@ -131,7 +163,7 @@ const createDefaultPermissions = (role = 'user') => {
 };
 
 const usersService = {
-  login: async (email, password) => {
+  login: async (email: string, password: string) => {
     try {
       console.log('Iniciando proceso de login con email...');
       
@@ -149,8 +181,8 @@ const usersService = {
         const basicUserData = {
           id: user.uid,
           email: user.email,
-          username: user.email.split('@')[0],
-          displayName: user.email.split('@')[0],
+          username: user.email?.split('@')[0] || '',
+          displayName: user.email?.split('@')[0] || '',
           role: 'user',
           permissions: createMinimalPermissions() // CORREGIDO: Solo permisos mínimos
         };
@@ -168,7 +200,7 @@ const usersService = {
       const userData = userDoc.data();
       
       // CORREGIDO: NO asegurar permisos automáticos, respetar exactamente los asignados
-      let permissions = userData.permissions || createMinimalPermissions();
+      let permissions = userData?.permissions || createMinimalPermissions();
       
       // CORREGIDO: Solo asegurar que dashboard esté activo (es el único obligatorio)
       if (!permissions.dashboard) {
@@ -178,84 +210,61 @@ const usersService = {
       return {
         uid: user.uid,
         email: user.email,
-        username: userData.username || user.email.split('@')[0],
-        displayName: userData.displayName || user.email.split('@')[0],
+        username: userData?.username || user.email?.split('@')[0] || '',
+        displayName: userData?.displayName || userData?.username || user.email?.split('@')[0] || '',
+        role: userData?.role || 'user',
+        permissions: permissions,
         emailVerified: user.emailVerified,
-        role: userData.role || 'user',
-        permissions: permissions
+        isNewUser: false
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al iniciar sesión:', error);
       throw error;
     }
   },
 
-  loginWithUsername: async (username, password) => {
+  loginWithUsername: async (username: string, password: string) => {
     try {
-      console.log('Iniciando proceso de login con nombre de usuario...');
+      console.log('Iniciando proceso de login con username...');
       
-      // Buscar el usuario en Firestore por nombre de usuario
+      // Buscar usuario por username para obtener email
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('username', '==', username));
       const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
-        console.error('Nombre de usuario no encontrado:', username);
-        throw { code: 'username-not-found', message: 'Nombre de usuario no encontrado' };
+        throw new Error('Usuario no encontrado');
       }
       
-      // Obtener el email del usuario
+      // Obtener el email del primer resultado
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
-      const email = userData.email;
+      const email = userData?.email;
       
       if (!email) {
-        throw new Error('Usuario sin correo electrónico asociado');
+        throw new Error('Email no encontrado para este usuario');
       }
       
-      // Iniciar sesión con Firebase usando el email
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      console.log('Login exitoso con ID:', user.uid);
-      
-      // CORREGIDO: NO asegurar permisos automáticos, respetar exactamente los asignados
-      let permissions = userData.permissions || createMinimalPermissions();
-      
-      // CORREGIDO: Solo asegurar que dashboard esté activo (es el único obligatorio)
-      if (!permissions.dashboard) {
-        permissions.dashboard = true;
-      }
-      
-      return {
-        uid: user.uid,
-        email: userData.email,
-        username: userData.username,
-        displayName: userData.displayName || userData.username,
-        emailVerified: user.emailVerified,
-        role: userData.role || 'user',
-        permissions: permissions
-      };
-    } catch (error) {
-      console.error('Error al iniciar sesión con nombre de usuario:', error);
+      // Hacer login con email obtenido
+      return await usersService.login(email, password);
+    } catch (error: any) {
+      console.error('Error al iniciar sesión con username:', error);
       throw error;
     }
   },
 
   logout: async () => {
     try {
-      console.log('Iniciando proceso de cierre de sesión');
       await signOut(auth);
-      console.log('Sesión cerrada correctamente');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cerrar sesión:', error);
       throw error;
     }
   },
 
   getCurrentUser: async () => {
-    return new Promise((resolve, reject) => {
+    return new Promise<User | null>((resolve, reject) => {
       const unsubscribe = onAuthStateChanged(auth, 
         (user) => {
           unsubscribe();
@@ -268,12 +277,12 @@ const usersService = {
     });
   },
 
-  isAuthenticated: async () => {
+  isAuthenticated: async (): Promise<boolean> => {
     const user = await usersService.getCurrentUser();
     return user !== null;
   },
 
-  createUser: async (userData) => {
+  createUser: async (userData: UserData): Promise<string> => {
     try {
       if (!userData.email || !userData.password) {
         throw new Error('El correo y la contraseña son obligatorios');
@@ -304,8 +313,8 @@ const usersService = {
       const dataWithDefaults = {
         id: user.uid,
         email: user.email,
-        username: userData.username || user.email.split('@')[0],
-        displayName: userData.displayName || userData.username || user.email.split('@')[0],
+        username: userData.username || user.email?.split('@')[0] || '',
+        displayName: userData.displayName || userData.username || user.email?.split('@')[0] || '',
         role: userData.role || 'user',
         permissions: userData.permissions || createMinimalPermissions(), // CORREGIDO: Solo mínimos
         createdAt: new Date()
@@ -320,13 +329,13 @@ const usersService = {
       await setDoc(doc(db, 'users', user.uid), dataWithDefaults);
       
       return user.uid;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al crear usuario:', error);
       throw error;
     }
   },
 
-  updateUser: async (userId, userData) => {
+  updateUser: async (userId: string, userData: Partial<UserData>): Promise<string> => {
     try {
       // Eliminar campos sensibles que no se deben actualizar directamente
       const { password, email, uid, ...updateData } = userData;
@@ -359,13 +368,13 @@ const usersService = {
       await updateDoc(doc(db, 'users', userId), dbUpdateData);
       
       return userId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al actualizar usuario ${userId}:`, error);
       throw error;
     }
   },
 
-  changePassword: async (currentPassword, newPassword) => {
+  changePassword: async (currentPassword: string, newPassword: string): Promise<boolean> => {
     try {
       // Actualizar contraseña en Firebase Auth
       const user = auth.currentUser;
@@ -373,13 +382,13 @@ const usersService = {
       
       await updatePassword(user, newPassword);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cambiar contraseña:', error);
       throw error;
     }
   },
   
-  changeEmail: async (password, newEmail) => {
+  changeEmail: async (password: string, newEmail: string): Promise<boolean> => {
     try {
       // Actualizar email en Firebase Auth
       const user = auth.currentUser;
@@ -394,28 +403,28 @@ const usersService = {
       });
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cambiar correo electrónico:', error);
       throw error;
     }
   },
   
-  resetPassword: async (email) => {
+  resetPassword: async (email: string): Promise<boolean> => {
     try {
       await sendPasswordResetEmail(auth, email);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al enviar correo de restablecimiento:', error);
       throw error;
     }
   },
   
-  getAllUsers: async () => {
+  getAllUsers: async (): Promise<any[]> => {
     try {
       const usersQuery = query(collection(db, 'users'), orderBy('displayName'));
       const querySnapshot = await getDocs(usersQuery);
       
-      const users = [];
+      const users: any[] = [];
       querySnapshot.forEach((doc) => {
         users.push({
           id: doc.id,
@@ -424,13 +433,13 @@ const usersService = {
       });
       
       return users;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al obtener usuarios:', error);
       throw error;
     }
   },
   
-  getUserById: async (userId) => {
+  getUserById: async (userId: string): Promise<any | null> => {
     try {
       const userDoc = await getDoc(doc(db, 'users', userId));
       
@@ -439,19 +448,19 @@ const usersService = {
       const userData = userDoc.data();
       return {
         id: userDoc.id,
-        email: userData.email,
-        username: userData.username,
-        displayName: userData.displayName,
-        role: userData.role,
-        permissions: userData.permissions
+        email: userData?.email,
+        username: userData?.username,
+        displayName: userData?.displayName,
+        role: userData?.role,
+        permissions: userData?.permissions
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al obtener usuario ${userId}:`, error);
       throw error;
     }
   },
   
-  updateUserPermissions: async (userId, permissions) => {
+  updateUserPermissions: async (userId: string, permissions: Permissions): Promise<string> => {
     try {
       // CORREGIDO: Solo asegurar que dashboard esté activo (es el único obligatorio)
       const finalPermissions = { ...permissions };
@@ -465,13 +474,13 @@ const usersService = {
       });
       
       return userId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al actualizar permisos del usuario ${userId}:`, error);
       throw error;
     }
   },
   
-  hasPermission: async (permission) => {
+  hasPermission: async (permission: string): Promise<boolean> => {
     try {
       const user = auth.currentUser;
       
@@ -487,23 +496,23 @@ const usersService = {
       const userData = userDoc.data();
       
       // Los administradores tienen todos los permisos
-      if (userData.permissions?.admin === true) {
+      if (userData?.permissions?.admin === true) {
         return true;
       }
       
       // Verificar permiso específico (debe estar explícitamente en true)
-      return userData.permissions?.[permission] === true;
-    } catch (error) {
+      return userData?.permissions?.[permission] === true;
+    } catch (error: any) {
       console.error(`Error al verificar permiso ${permission}:`, error);
       return false;
     }
   },
 
-  verifySession: async () => {
+  verifySession: async (): Promise<boolean> => {
     try {
       const user = auth.currentUser;
       return user !== null;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error en verifySession:', error);
       return false;
     }

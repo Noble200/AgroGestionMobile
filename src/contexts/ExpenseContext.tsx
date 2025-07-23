@@ -1,4 +1,4 @@
-// src/contexts/ExpenseContext.js - Contexto para gestión de gastos
+// src/contexts/ExpenseContext.tsx - Contexto para gestión de gastos
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   collection, 
@@ -17,21 +17,96 @@ import {
 import { db } from '../api/firebase';
 import { useAuth } from './AuthContext';
 
-// Crear el contexto de gastos
-const ExpenseContext = createContext();
-
-export function useExpenses() {
-  return useContext(ExpenseContext);
+// Tipos para ExpenseContext
+interface Expense {
+  id: string;
+  expenseNumber: string;
+  type: 'product' | 'misc';
+  date: any;
+  // Datos para gastos de productos
+  productId?: string | null;
+  productName: string;
+  productCategory: string;
+  quantitySold: number;
+  unitPrice: number;
+  totalAmount: number;
+  saleReason: string;
+  // Datos para gastos varios
+  description: string;
+  category: string;
+  amount: number;
+  supplier: string;
+  // Datos comunes
+  notes: string;
+  createdBy: string;
+  createdAt: any;
+  updatedAt: any;
 }
 
-export function ExpenseProvider({ children }) {
+interface ExpenseData {
+  expenseNumber?: string;
+  type: 'product' | 'misc';
+  date: any;
+  productId?: string;
+  productName?: string;
+  productCategory?: string;
+  quantitySold?: number;
+  unitPrice?: number;
+  totalAmount?: number;
+  saleReason?: string;
+  description?: string;
+  category?: string;
+  amount?: number;
+  supplier?: string;
+  notes?: string;
+  [key: string]: any;
+}
+
+interface ExpenseFilters {
+  type?: string;
+  category?: string;
+  dateRange?: {
+    start?: string;
+    end?: string;
+  };
+  searchTerm?: string;
+}
+
+interface ExpenseProviderProps {
+  children: React.ReactNode;
+}
+
+interface ExpenseContextType {
+  expenses: Expense[];
+  loading: boolean;
+  error: string;
+  setError: (error: string) => void;
+  loadExpenses: (filters?: ExpenseFilters) => Promise<Expense[]>;
+  addExpense: (expenseData: ExpenseData) => Promise<string>;
+  updateExpense: (expenseId: string, expenseData: Partial<ExpenseData>) => Promise<string>;
+  deleteExpense: (expenseId: string) => Promise<boolean>;
+  generateExpenseNumber: () => Promise<string>;
+}
+
+// Crear el contexto de gastos
+const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
+
+export function useExpenses() {
+  const context = useContext(ExpenseContext);
+  if (!context) {
+    throw new Error('useExpenses must be used within an ExpenseProvider');
+  }
+  return context;
+}
+
+export function ExpenseProvider({ children }: ExpenseProviderProps) {
   const { currentUser } = useAuth();
-  const [expenses, setExpenses] = useState([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // Cargar gastos
-  const loadExpenses = useCallback(async (filters = {}) => {
+  const loadExpenses = useCallback(async (filters: ExpenseFilters = {}): Promise<Expense[]> => {
     try {
       setLoading(true);
       setError('');
@@ -43,13 +118,13 @@ export function ExpenseProvider({ children }) {
       const querySnapshot = await getDocs(expensesQuery);
       
       // Mapear documentos a objetos de gastos
-      let expensesData = [];
+      let expensesData: Expense[] = [];
       querySnapshot.forEach((doc) => {
         const expenseData = doc.data();
         expensesData.push({
           id: doc.id,
           expenseNumber: expenseData.expenseNumber || '',
-          type: expenseData.type || 'product', // 'product' o 'misc'
+          type: expenseData.type || 'product',
           date: expenseData.date,
           // Datos para gastos de productos
           productId: expenseData.productId || null,
@@ -111,7 +186,7 @@ export function ExpenseProvider({ children }) {
       
       setExpenses(expensesData);
       return expensesData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar gastos:', error);
       setError('Error al cargar gastos: ' + error.message);
       throw error;
@@ -121,7 +196,7 @@ export function ExpenseProvider({ children }) {
   }, []);
 
   // Generar número de gasto automático
-  const generateExpenseNumber = useCallback(async () => {
+  const generateExpenseNumber = useCallback(async (): Promise<string> => {
     try {
       const currentYear = new Date().getFullYear();
       const expensesQuery = query(
@@ -141,14 +216,14 @@ export function ExpenseProvider({ children }) {
       }
       
       return `GAST-${currentYear}-${nextNumber.toString().padStart(4, '0')}`;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al generar número de gasto:', error);
       return `GAST-${new Date().getFullYear()}-0001`;
     }
   }, []);
 
   // Añadir un gasto con descuento de stock automático
-  const addExpense = useCallback(async (expenseData) => {
+  const addExpense = useCallback(async (expenseData: ExpenseData): Promise<string> => {
     try {
       setError('');
       
@@ -162,7 +237,7 @@ export function ExpenseProvider({ children }) {
       // Usar transacción para asegurar consistencia
       const expenseId = await runTransaction(db, async (transaction) => {
         // Si es un gasto de producto, verificar y descontar stock
-        if (expenseData.type === 'product' && expenseData.productId && expenseData.quantitySold > 0) {
+        if (expenseData.type === 'product' && expenseData.productId && expenseData.quantitySold && expenseData.quantitySold > 0) {
           console.log('Procesando gasto de producto...'); // Debug
           
           const productRef = doc(db, 'products', expenseData.productId);
@@ -173,66 +248,42 @@ export function ExpenseProvider({ children }) {
           }
           
           const productData = productDoc.data();
-          const currentStock = productData.stock || 0;
+          const currentStock = productData?.stock || 0;
           const quantityToDeduct = expenseData.quantitySold || 0;
           
-          console.log(`Producto: ${productData.name}, Stock actual: ${currentStock}, Cantidad a descontar: ${quantityToDeduct}`); // Debug
+          console.log(`Producto: ${productData?.name}, Stock actual: ${currentStock}, Cantidad a descontar: ${quantityToDeduct}`); // Debug
           
           // Verificar que hay suficiente stock
           if (currentStock < quantityToDeduct) {
-            throw new Error(`No hay suficiente stock del producto ${productData.name}. Stock disponible: ${currentStock}, requerido: ${quantityToDeduct}`);
+            throw new Error(`No hay suficiente stock del producto ${productData?.name}. Stock disponible: ${currentStock}, requerido: ${quantityToDeduct}`);
           }
           
-          // Descontar del stock
+          // Descontar stock
           const newStock = currentStock - quantityToDeduct;
-          console.log(`Actualizando stock de ${productData.name} de ${currentStock} a ${newStock}`); // Debug
-          
           transaction.update(productRef, {
             stock: newStock,
             updatedAt: serverTimestamp()
           });
           
-          // Añadir datos del producto al gasto
-          expenseData.productName = productData.name;
-          expenseData.productCategory = productData.category;
+          console.log(`Stock actualizado: ${currentStock} -> ${newStock}`); // Debug
         }
         
-        // Preparar datos para Firestore
-        const dbExpenseData = {
-          expenseNumber: expenseData.expenseNumber,
-          type: expenseData.type || 'product',
-          // Datos para gastos de productos
-          productId: expenseData.productId || null,
-          productName: expenseData.productName || '',
-          productCategory: expenseData.productCategory || '',
-          quantitySold: expenseData.quantitySold || 0,
-          unitPrice: expenseData.unitPrice || 0,
-          totalAmount: expenseData.totalAmount || 0,
-          saleReason: expenseData.saleReason || '',
-          // Datos para gastos varios
-          description: expenseData.description || '',
-          category: expenseData.category || '',
-          amount: expenseData.amount || 0,
-          supplier: expenseData.supplier || '',
-          // Datos comunes
-          notes: expenseData.notes || '',
-          createdBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
+        // Preparar datos del gasto
+        const expenseDocData = {
+          ...expenseData,
+          createdBy: currentUser?.uid || '',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
         
-        // Convertir fecha si existe
-        if (expenseData.date) {
-          if (expenseData.date instanceof Date) {
-            dbExpenseData.date = Timestamp.fromDate(expenseData.date);
-          }
-        } else {
-          dbExpenseData.date = serverTimestamp();
+        // Convertir fecha si es necesario
+        if (expenseData.date && expenseData.date instanceof Date) {
+          expenseDocData.date = Timestamp.fromDate(expenseData.date);
         }
         
-        // Insertar gasto en Firestore
+        // Crear gasto
         const expenseRef = doc(collection(db, 'expenses'));
-        transaction.set(expenseRef, dbExpenseData);
+        transaction.set(expenseRef, expenseDocData);
         
         return expenseRef.id;
       });
@@ -243,31 +294,29 @@ export function ExpenseProvider({ children }) {
       await loadExpenses();
       
       return expenseId;
-    } catch (error) {
-      console.error('Error al añadir gasto:', error);
-      setError('Error al añadir gasto: ' + error.message);
+    } catch (error: any) {
+      console.error('Error al crear gasto:', error);
+      setError('Error al crear gasto: ' + error.message);
       throw error;
     }
-  }, [loadExpenses, generateExpenseNumber, currentUser]);
+  }, [currentUser, generateExpenseNumber, loadExpenses]);
 
   // Actualizar un gasto
-  const updateExpense = useCallback(async (expenseId, expenseData) => {
+  const updateExpense = useCallback(async (expenseId: string, expenseData: Partial<ExpenseData>): Promise<string> => {
     try {
       setError('');
       
       console.log('Actualizando gasto:', expenseId, expenseData); // Debug
       
-      // Preparar datos para actualizar
+      // Preparar datos de actualización
       const updateData = {
         ...expenseData,
         updatedAt: serverTimestamp()
       };
       
-      // Convertir fecha si existe
-      if (expenseData.date) {
-        if (expenseData.date instanceof Date) {
-          updateData.date = Timestamp.fromDate(expenseData.date);
-        }
+      // Convertir fecha si es necesario
+      if (expenseData.date && expenseData.date instanceof Date) {
+        updateData.date = Timestamp.fromDate(expenseData.date);
       }
       
       // Actualizar gasto en Firestore
@@ -279,7 +328,7 @@ export function ExpenseProvider({ children }) {
       await loadExpenses();
       
       return expenseId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al actualizar gasto ${expenseId}:`, error);
       setError('Error al actualizar gasto: ' + error.message);
       throw error;
@@ -287,7 +336,7 @@ export function ExpenseProvider({ children }) {
   }, [loadExpenses]);
 
   // Eliminar un gasto
-  const deleteExpense = useCallback(async (expenseId) => {
+  const deleteExpense = useCallback(async (expenseId: string): Promise<boolean> => {
     try {
       setError('');
       
@@ -302,7 +351,7 @@ export function ExpenseProvider({ children }) {
       await loadExpenses();
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al eliminar gasto ${expenseId}:`, error);
       setError('Error al eliminar gasto: ' + error.message);
       throw error;
@@ -323,14 +372,14 @@ export function ExpenseProvider({ children }) {
       .then(() => {
         console.log('Gastos cargados exitosamente'); // Debug
       })
-      .catch(err => {
+      .catch((err: any) => {
         console.error('Error al cargar datos iniciales de gastos:', err);
         setError('Error al cargar datos: ' + err.message);
       });
   }, [currentUser, loadExpenses]);
 
   // Valor que se proporcionará a través del contexto
-  const value = {
+  const value: ExpenseContextType = {
     expenses,
     loading,
     error,

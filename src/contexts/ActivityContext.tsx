@@ -1,4 +1,4 @@
-// src/contexts/ActivityContext.js - SOLUCIÓN FINAL: Timestamps reales sin recarga
+// src/contexts/ActivityContext.tsx - SOLUCIÓN FINAL: Timestamps reales sin recarga
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   collection, 
@@ -15,15 +15,52 @@ import {
 import { db } from '../api/firebase';
 import { useAuth } from './AuthContext';
 
+// Tipos para ActivityContext
+interface Activity {
+  id: string;
+  type: string;
+  entity: string;
+  entityId: string;
+  entityName: string;
+  action: string;
+  description: string;
+  metadata: any;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  createdAt: Date;
+  _originalTimestamp: any;
+}
+
+interface ActivityProviderProps {
+  children: React.ReactNode;
+}
+
+interface ActivityContextType {
+  activities: Activity[];
+  loading: boolean;
+  error: string;
+  logActivity: (type: string, action: string, entity: string, entityData?: any, metadata?: any) => Promise<string>;
+  loadActivities: (limitCount?: number, reset?: boolean) => Promise<Activity[]>;
+  loadMoreActivities: (limitCount?: number) => Promise<Activity[]>;
+  loadActivitiesByEntity: (entityType: string, entityId: string) => Promise<Activity[]>;
+  loadActivitiesByUser: (userId: string) => Promise<Activity[]>;
+  getRecentActivities: () => Activity[];
+}
+
 // Crear el contexto de actividades
-const ActivityContext = createContext();
+const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
 
 export function useActivities() {
-  return useContext(ActivityContext);
+  const context = useContext(ActivityContext);
+  if (!context) {
+    throw new Error('useActivities must be used within an ActivityProvider');
+  }
+  return context;
 }
 
 // SOLUCIÓN FINAL: Función para convertir timestamp de Firebase preservando el timestamp original
-const convertFirebaseTimestamp = (timestamp) => {
+const convertFirebaseTimestamp = (timestamp: any): Date => {
   try {
     if (!timestamp) {
       console.warn('⚠️ Timestamp vacío');
@@ -68,57 +105,95 @@ const convertFirebaseTimestamp = (timestamp) => {
     console.warn('⚠️ Timestamp no reconocido:', timestamp);
     return new Date();
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error al convertir timestamp:', error);
     return new Date();
   }
 };
 
-export function ActivityProvider({ children }) {
-  const { currentUser } = useAuth();
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(false);
+export function ActivityProvider({ children }: ActivityProviderProps) {
+  const { currentUser } = useAuth() as any;
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [lastVisible, setLastVisible] = useState(null);
+  const [lastVisible, setLastVisible] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
   
+  // Referencias para evitar múltiples cargas y listeners
   const isLoadingRef = useRef(false);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
   const hasInitializedRef = useRef(false);
-  const unsubscribeRef = useRef(null);
 
-  // SOLUCIÓN FINAL: Usar listener en tiempo real para obtener timestamps exactos
-  const setupRealtimeListener = useCallback(() => {
-    if (!currentUser || unsubscribeRef.current) return;
+  // Función para registrar una nueva actividad
+  const logActivity = useCallback(async (type: string, action: string, entity: string, entityData: any = {}, metadata: any = {}) => {
+    try {
+      if (!currentUser) {
+        console.warn('⚠️ No hay usuario logueado para registrar actividad');
+        return '';
+      }
 
-    console.log('🔴 Configurando listener en tiempo real para actividades...');
+      const activityDoc = {
+        type,
+        action,
+        entity,
+        entityId: entityData?.id || entityData?.uid || '',
+        entityName: entityData?.name || entityData?.displayName || entityData?.username || entityData?.title || '',
+        description: `${action} en ${entity}`,
+        metadata: {
+          ...metadata,
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString()
+        },
+        userId: currentUser.uid,
+        userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Usuario',
+        userEmail: currentUser.email || '',
+        createdAt: serverTimestamp()
+      };
+
+      console.log('📝 Registrando actividad:', activityDoc);
+
+      const docRef = await addDoc(collection(db, 'activities'), activityDoc);
+      
+      console.log('✅ Actividad registrada con ID:', docRef.id);
+      
+      return docRef.id;
+    } catch (error: any) {
+      console.error('❌ Error al registrar actividad:', error);
+      setError('Error al registrar actividad: ' + error.message);
+      throw error;
+    }
+  }, [currentUser]);
+
+  // SOLUCIÓN FINAL: Configurar listener en tiempo real
+  const setupRealtimeListener = useCallback(async () => {
+    if (!currentUser) {
+      console.log('❌ No hay usuario para configurar listener');
+      return;
+    }
 
     try {
-      // Query para las actividades más recientes
+      console.log('🔧 Configurando listener de actividades en tiempo real...');
+      
+      // Limpiar listener anterior si existe
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+
       const activitiesQuery = query(
-        collection(db, 'activities'),
+        collection(db, 'activities'), 
         orderBy('createdAt', 'desc'),
-        limit(100)
+        limit(50)
       );
 
-      // LISTENER EN TIEMPO REAL
       const unsubscribe = onSnapshot(activitiesQuery, (snapshot) => {
-        console.log('📡 Snapshot recibido - cambios:', snapshot.docChanges().length);
+        console.log('📡 Datos de actividades actualizados en tiempo real');
         
-        const activitiesData = [];
+        const activitiesData: Activity[] = [];
         
         snapshot.forEach((doc) => {
           const activityData = doc.data();
           
-          // CRÍTICO: Preservar el timestamp original de Firebase
-          const originalTimestamp = activityData.createdAt;
-          
-          console.log('📄 Procesando actividad:', {
-            id: doc.id,
-            action: activityData.action,
-            originalTimestamp: originalTimestamp,
-            timestampType: typeof originalTimestamp
-          });
-          
-          const convertedActivity = {
+          const convertedActivity: Activity = {
             id: doc.id,
             type: activityData.type || 'unknown',
             entity: activityData.entity || 'unknown',
@@ -130,14 +205,14 @@ export function ActivityProvider({ children }) {
             userId: activityData.userId || '',
             userName: activityData.userName || 'Usuario desconocido',
             userEmail: activityData.userEmail || '',
-            createdAt: convertFirebaseTimestamp(originalTimestamp), // PRESERVAR timestamp original
-            _originalTimestamp: originalTimestamp // Guardar referencia original para debug
+            createdAt: convertFirebaseTimestamp(activityData.createdAt),
+            _originalTimestamp: activityData.createdAt
           };
           
           activitiesData.push(convertedActivity);
         });
         
-        // Ordenar por timestamp (más reciente primero)
+        // Ordenar por fecha descendente
         activitiesData.sort((a, b) => {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
@@ -155,7 +230,7 @@ export function ActivityProvider({ children }) {
         
         setActivities(activitiesData);
         setLoading(false);
-      }, (error) => {
+      }, (error: any) => {
         console.error('❌ Error en listener de actividades:', error);
         setError('Error al cargar actividades en tiempo real: ' + error.message);
         setLoading(false);
@@ -164,7 +239,7 @@ export function ActivityProvider({ children }) {
       unsubscribeRef.current = unsubscribe;
       console.log('✅ Listener de actividades configurado');
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error al configurar listener:', error);
       setError('Error al configurar listener: ' + error.message);
       setLoading(false);
@@ -172,7 +247,7 @@ export function ActivityProvider({ children }) {
   }, [currentUser]);
 
   // Cargar actividades manualmente (fallback)
-  const loadActivities = useCallback(async (limitCount = 50, reset = true) => {
+  const loadActivities = useCallback(async (limitCount = 50, reset = true): Promise<Activity[]> => {
     if (isLoadingRef.current) return [];
 
     try {
@@ -189,12 +264,12 @@ export function ActivityProvider({ children }) {
       );
       
       const querySnapshot = await getDocs(activitiesQuery);
-      const activitiesData = [];
+      const activitiesData: Activity[] = [];
       
       querySnapshot.forEach((doc) => {
         const activityData = doc.data();
         
-        const convertedActivity = {
+        const convertedActivity: Activity = {
           id: doc.id,
           type: activityData.type || 'unknown',
           entity: activityData.entity || 'unknown',
@@ -213,6 +288,7 @@ export function ActivityProvider({ children }) {
         activitiesData.push(convertedActivity);
       });
       
+      // Ordenar por fecha descendente
       activitiesData.sort((a, b) => {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
@@ -221,12 +297,16 @@ export function ActivityProvider({ children }) {
         setActivities(activitiesData);
       }
       
+      // Actualizar lastVisible para paginación
       if (querySnapshot.docs.length > 0) {
         setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+        setHasMore(querySnapshot.docs.length === limitCount);
+      } else {
+        setHasMore(false);
       }
       
       return activitiesData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error al cargar actividades:', error);
       setError('Error al cargar actividades: ' + error.message);
       throw error;
@@ -236,28 +316,30 @@ export function ActivityProvider({ children }) {
     }
   }, []);
 
-  // Cargar más actividades
-  const loadMoreActivities = useCallback(async (limitCount = 20) => {
-    if (!lastVisible || isLoadingRef.current) return [];
-    
+  // Cargar más actividades (paginación)
+  const loadMoreActivities = useCallback(async (limitCount = 20): Promise<Activity[]> => {
+    if (!hasMore || isLoadingRef.current || !lastVisible) return [];
+
     try {
       isLoadingRef.current = true;
-      setLoading(true);
+      setError('');
+      
+      console.log('📄 Cargando más actividades...');
       
       const activitiesQuery = query(
-        collection(db, 'activities'),
+        collection(db, 'activities'), 
         orderBy('createdAt', 'desc'),
         startAfter(lastVisible),
         limit(limitCount)
       );
       
       const querySnapshot = await getDocs(activitiesQuery);
-      const activitiesData = [];
+      const newActivitiesData: Activity[] = [];
       
       querySnapshot.forEach((doc) => {
         const activityData = doc.data();
         
-        const convertedActivity = {
+        const convertedActivity: Activity = {
           id: doc.id,
           type: activityData.type || 'unknown',
           entity: activityData.entity || 'unknown',
@@ -273,112 +355,53 @@ export function ActivityProvider({ children }) {
           _originalTimestamp: activityData.createdAt
         };
         
-        activitiesData.push(convertedActivity);
+        newActivitiesData.push(convertedActivity);
       });
       
-      setActivities(prev => {
-        const combined = [...prev, ...activitiesData];
-        return combined.sort((a, b) => {
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
-      });
+      // Añadir nuevas actividades a las existentes
+      setActivities(prev => [...prev, ...newActivitiesData]);
       
+      // Actualizar estado de paginación
       if (querySnapshot.docs.length > 0) {
         setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+        setHasMore(querySnapshot.docs.length === limitCount);
+      } else {
+        setHasMore(false);
       }
       
-      return activitiesData;
-    } catch (error) {
+      return newActivitiesData;
+    } catch (error: any) {
       console.error('❌ Error al cargar más actividades:', error);
       setError('Error al cargar más actividades: ' + error.message);
       throw error;
     } finally {
-      setLoading(false);
       isLoadingRef.current = false;
     }
-  }, [lastVisible]);
+  }, [lastVisible, hasMore]);
 
-  // SOLUCIÓN FINAL: Registrar actividad sin recargar
-  const logActivity = useCallback(async (activityData) => {
-    try {
-      if (!currentUser) {
-        console.warn('⚠️ No hay usuario autenticado');
-        return;
-      }
-
-      console.log('🆕 Registrando actividad:', activityData.action);
-
-      const cleanedActivityData = {
-        type: activityData.type || 'unknown',
-        entity: activityData.entity || 'unknown',
-        entityId: activityData.entityId || '',
-        entityName: activityData.entityName || '',
-        action: activityData.action || '',
-        description: activityData.description || '',
-        metadata: activityData.metadata || {},
-        userId: currentUser.uid,
-        userName: currentUser.displayName || currentUser.email || 'Usuario desconocido',
-        userEmail: currentUser.email || '',
-        createdAt: serverTimestamp() // Firebase establecerá el timestamp exacto
-      };
-
-      if (!cleanedActivityData.type || !cleanedActivityData.entity) {
-        console.warn('⚠️ Datos insuficientes');
-        return;
-      }
-
-      // Insertar en Firestore
-      const docRef = await addDoc(collection(db, 'activities'), cleanedActivityData);
-      
-      console.log('✅ Actividad registrada con ID:', docRef.id);
-      console.log('📡 El listener en tiempo real actualizará automáticamente la lista');
-      
-      // NO recargar manualmente - el listener se encargará
-      
-      return docRef.id;
-
-    } catch (error) {
-      console.error('❌ Error al registrar actividad:', error);
-      setError('Error al registrar actividad: ' + error.message);
-    }
-  }, [currentUser]);
-
-  // Funciones para cargar por entidad/usuario (simplificadas)
-  const loadActivitiesByEntity = useCallback(async (entity, entityId = null) => {
-    // Detener listener actual
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-      unsubscribeRef.current = null;
-    }
-
+  // Cargar actividades por entidad específica
+  const loadActivitiesByEntity = useCallback(async (entityType: string, entityId: string): Promise<Activity[]> => {
     try {
       setLoading(true);
       setError('');
       
-      let activitiesQuery = query(
-        collection(db, 'activities'),
-        where('entity', '==', entity),
+      console.log(`🔍 Cargando actividades para ${entityType}:${entityId}`);
+      
+      const activitiesQuery = query(
+        collection(db, 'activities'), 
+        where('entity', '==', entityType),
+        where('entityId', '==', entityId),
         orderBy('createdAt', 'desc'),
-        limit(50)
+        limit(100)
       );
       
-      if (entityId) {
-        activitiesQuery = query(
-          collection(db, 'activities'),
-          where('entity', '==', entity),
-          where('entityId', '==', entityId),
-          orderBy('createdAt', 'desc'),
-          limit(50)
-        );
-      }
-      
       const querySnapshot = await getDocs(activitiesQuery);
-      const activitiesData = [];
+      const activitiesData: Activity[] = [];
       
       querySnapshot.forEach((doc) => {
         const activityData = doc.data();
         
-        const convertedActivity = {
+        const convertedActivity: Activity = {
           id: doc.id,
           type: activityData.type || 'unknown',
           entity: activityData.entity || 'unknown',
@@ -401,9 +424,8 @@ export function ActivityProvider({ children }) {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
       
-      setActivities(activitiesData);
       return activitiesData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error al cargar actividades por entidad:', error);
       setError('Error al cargar actividades: ' + error.message);
       throw error;
@@ -412,31 +434,28 @@ export function ActivityProvider({ children }) {
     }
   }, []);
 
-  const loadActivitiesByUser = useCallback(async (userId) => {
-    // Detener listener actual
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-      unsubscribeRef.current = null;
-    }
-
+  // Cargar actividades por usuario específico
+  const loadActivitiesByUser = useCallback(async (userId: string): Promise<Activity[]> => {
     try {
       setLoading(true);
       setError('');
       
+      console.log(`👤 Cargando actividades para usuario: ${userId}`);
+      
       const activitiesQuery = query(
-        collection(db, 'activities'),
+        collection(db, 'activities'), 
         where('userId', '==', userId),
         orderBy('createdAt', 'desc'),
-        limit(50)
+        limit(100)
       );
       
       const querySnapshot = await getDocs(activitiesQuery);
-      const activitiesData = [];
+      const activitiesData: Activity[] = [];
       
       querySnapshot.forEach((doc) => {
         const activityData = doc.data();
         
-        const convertedActivity = {
+        const convertedActivity: Activity = {
           id: doc.id,
           type: activityData.type || 'unknown',
           entity: activityData.entity || 'unknown',
@@ -461,7 +480,7 @@ export function ActivityProvider({ children }) {
       
       setActivities(activitiesData);
       return activitiesData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error al cargar actividades por usuario:', error);
       setError('Error al cargar actividades: ' + error.message);
       throw error;
@@ -508,7 +527,7 @@ export function ActivityProvider({ children }) {
     };
   }, [currentUser, setupRealtimeListener]);
 
-  const value = {
+  const value: ActivityContextType = {
     activities,
     loading,
     error,

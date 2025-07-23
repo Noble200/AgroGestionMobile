@@ -1,4 +1,4 @@
-// src/contexts/HarvestContext.js - Contexto corregido con integración de stock
+// src/contexts/HarvestContext.tsx - Contexto corregido con integración de stock
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   collection, 
@@ -17,21 +17,165 @@ import {
 import { db } from '../api/firebase';
 import { useAuth } from './AuthContext';
 
-// Crear el contexto de cosechas
-const HarvestContext = createContext();
-
-export function useHarvests() {
-  return useContext(HarvestContext);
+// Tipos para HarvestContext
+interface Lot {
+  id: string;
+  name: string;
+  surface: number;
+  crop?: string;
+  [key: string]: any;
 }
 
-export function HarvestProvider({ children }) {
+interface Field {
+  id: string;
+  name: string;
+  establishment: string;
+  lots?: Lot[];
+  [key: string]: any;
+}
+
+interface Machinery {
+  id: string;
+  name: string;
+  type: string;
+  hours?: number;
+}
+
+interface SelectedProduct {
+  productId: string;
+  productName: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  notes?: string;
+}
+
+interface HarvestedProduct {
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  storageLevel?: string;
+  estimatedValue?: number;
+  notes?: string;
+}
+
+interface Harvest {
+  id: string;
+  field: Field;
+  fieldId: string;
+  crop: string;
+  lots: Lot[];
+  totalArea: number;
+  areaUnit: string;
+  plannedDate: any;
+  harvestDate?: any | null;
+  status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
+  estimatedYield: number;
+  actualYield: number;
+  yieldUnit: string;
+  totalHarvested: number;
+  totalHarvestedUnit: string;
+  harvestMethod: string;
+  machinery: Machinery[];
+  workers: string;
+  targetWarehouse: string;
+  destination: string;
+  qualityNotes: string;
+  weatherConditions: string;
+  selectedProducts?: SelectedProduct[];
+  harvestedProducts?: HarvestedProduct[];
+  createdBy: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
+interface HarvestData {
+  field?: Field;
+  fieldId: string;
+  crop: string;
+  lots: Lot[];
+  totalArea: number;
+  areaUnit?: string;
+  plannedDate: any;
+  harvestDate?: any;
+  status?: 'pending' | 'in-progress' | 'completed' | 'cancelled';
+  estimatedYield: number;
+  actualYield?: number;
+  yieldUnit?: string;
+  totalHarvested?: number;
+  totalHarvestedUnit?: string;
+  harvestMethod: string;
+  machinery?: Machinery[];
+  workers?: string;
+  targetWarehouse?: string;
+  destination?: string;
+  qualityNotes?: string;
+  weatherConditions?: string;
+  selectedProducts?: SelectedProduct[];
+  harvestedProducts?: HarvestedProduct[];
+  [key: string]: any;
+}
+
+interface CompletionData {
+  actualYield: number;
+  totalHarvested: number;
+  harvestDate?: Date;
+  harvestedProducts?: HarvestedProduct[];
+  qualityNotes?: string;
+  weatherConditions?: string;
+}
+
+interface HarvestFilters {
+  status?: string;
+  field?: string;
+  crop?: string;
+  dateRange?: {
+    start?: string;
+    end?: string;
+  };
+  searchTerm?: string;
+}
+
+interface HarvestProviderProps {
+  children: React.ReactNode;
+}
+
+interface HarvestContextType {
+  harvests: Harvest[];
+  loading: boolean;
+  error: string;
+  setError: (error: string) => void;
+  loadHarvests: (filters?: HarvestFilters) => Promise<Harvest[]>;
+  addHarvest: (harvestData: HarvestData) => Promise<string>;
+  updateHarvest: (harvestId: string, harvestData: Partial<HarvestData>) => Promise<string>;
+  deleteHarvest: (harvestId: string) => Promise<boolean>;
+  completeHarvest: (harvestId: string, completionData?: CompletionData) => Promise<string>;
+}
+
+// Crear el contexto de cosechas
+const HarvestContext = createContext<HarvestContextType | undefined>(undefined);
+
+export function useHarvests() {
+  const context = useContext(HarvestContext);
+  if (!context) {
+    throw new Error('useHarvests must be used within a HarvestProvider');
+  }
+  return context;
+}
+
+export function HarvestProvider({ children }: HarvestProviderProps) {
   const { currentUser } = useAuth();
-  const [harvests, setHarvests] = useState([]);
+  const [harvests, setHarvests] = useState<Harvest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // Cargar cosechas
-  const loadHarvests = useCallback(async (filters = {}) => {
+  const loadHarvests = useCallback(async (filters: HarvestFilters = {}): Promise<Harvest[]> => {
     try {
       setLoading(true);
       setError('');
@@ -43,7 +187,7 @@ export function HarvestProvider({ children }) {
       const querySnapshot = await getDocs(harvestsQuery);
       
       // Mapear documentos a objetos de cosechas
-      let harvestsData = [];
+      let harvestsData: Harvest[] = [];
       querySnapshot.forEach((doc) => {
         const harvestData = doc.data();
         harvestsData.push({
@@ -67,13 +211,11 @@ export function HarvestProvider({ children }) {
           workers: harvestData.workers || '',
           targetWarehouse: harvestData.targetWarehouse || '',
           destination: harvestData.destination || '',
-          qualityParameters: harvestData.qualityParameters || [],
-          qualityResults: harvestData.qualityResults || [],
-          notes: harvestData.notes || '',
-          harvestNotes: harvestData.harvestNotes || '',
-          // Campos para productos
+          qualityNotes: harvestData.qualityNotes || '',
+          weatherConditions: harvestData.weatherConditions || '',
           selectedProducts: harvestData.selectedProducts || [],
-          productsHarvested: harvestData.productsHarvested || [],
+          harvestedProducts: harvestData.harvestedProducts || [],
+          createdBy: harvestData.createdBy || '',
           createdAt: harvestData.createdAt,
           updatedAt: harvestData.updatedAt
         });
@@ -86,18 +228,22 @@ export function HarvestProvider({ children }) {
         harvestsData = harvestsData.filter(harvest => harvest.status === filters.status);
       }
       
-      if (filters.crop) {
-        harvestsData = harvestsData.filter(harvest => harvest.crop === filters.crop);
-      }
-
       if (filters.field) {
-        harvestsData = harvestsData.filter(harvest => harvest.fieldId === filters.field);
+        harvestsData = harvestsData.filter(harvest => 
+          harvest.field?.name?.toLowerCase().includes(filters.field!.toLowerCase())
+        );
+      }
+      
+      if (filters.crop) {
+        harvestsData = harvestsData.filter(harvest => 
+          harvest.crop.toLowerCase().includes(filters.crop!.toLowerCase())
+        );
       }
       
       if (filters.dateRange) {
         const { start, end } = filters.dateRange;
         harvestsData = harvestsData.filter(harvest => {
-          const plannedDate = harvest.plannedDate 
+          const plannedDate = harvest.plannedDate
             ? new Date(harvest.plannedDate.seconds ? harvest.plannedDate.seconds * 1000 : harvest.plannedDate) 
             : null;
           
@@ -119,7 +265,7 @@ export function HarvestProvider({ children }) {
       
       setHarvests(harvestsData);
       return harvestsData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar cosechas:', error);
       setError('Error al cargar cosechas: ' + error.message);
       throw error;
@@ -129,7 +275,7 @@ export function HarvestProvider({ children }) {
   }, []);
 
   // CORREGIDO: Añadir una cosecha con descuento de stock automático
-  const addHarvest = useCallback(async (harvestData) => {
+  const addHarvest = useCallback(async (harvestData: HarvestData): Promise<string> => {
     try {
       setError('');
       
@@ -150,60 +296,54 @@ export function HarvestProvider({ children }) {
             }
             
             const productData = productDoc.data();
-            const currentStock = productData.stock || 0;
+            const currentStock = productData?.stock || 0;
             const quantityToUse = selectedProduct.quantity || 0;
             
-            console.log(`Producto: ${productData.name}, Stock actual: ${currentStock}, Cantidad a usar: ${quantityToUse}`); // Debug
+            console.log(`Producto: ${productData?.name}, Stock actual: ${currentStock}, Cantidad a usar: ${quantityToUse}`); // Debug
             
             // Verificar que hay suficiente stock
             if (currentStock < quantityToUse) {
-              throw new Error(`No hay suficiente stock del producto ${productData.name}. Stock disponible: ${currentStock}, requerido: ${quantityToUse}`);
+              throw new Error(`No hay suficiente stock del producto ${productData?.name}. Stock disponible: ${currentStock}, requerido: ${quantityToUse}`);
             }
             
-            // Descontar del stock
+            // Descontar stock
             const newStock = currentStock - quantityToUse;
-            console.log(`Actualizando stock de ${productData.name} de ${currentStock} a ${newStock}`); // Debug
-            
             transaction.update(productRef, {
               stock: newStock,
               updatedAt: serverTimestamp()
             });
+            
+            console.log(`Stock actualizado: ${currentStock} -> ${newStock}`); // Debug
           }
         }
         
-        // Preparar datos para Firestore
-        const dbHarvestData = {
-          field: harvestData.field || {},
-          fieldId: harvestData.fieldId || harvestData.field?.id || '',
-          crop: harvestData.crop || '',
-          lots: harvestData.lots || [],
-          totalArea: harvestData.totalArea || 0,
-          areaUnit: harvestData.areaUnit || 'ha',
+        // Preparar datos de la cosecha
+        const harvestDocData = {
+          ...harvestData,
           status: harvestData.status || 'pending',
-          estimatedYield: harvestData.estimatedYield || 0,
+          areaUnit: harvestData.areaUnit || 'ha',
           yieldUnit: harvestData.yieldUnit || 'kg/ha',
-          harvestMethod: harvestData.harvestMethod || '',
+          totalHarvestedUnit: harvestData.totalHarvestedUnit || 'kg',
           machinery: harvestData.machinery || [],
-          workers: harvestData.workers || '',
-          targetWarehouse: harvestData.targetWarehouse || '',
-          qualityParameters: harvestData.qualityParameters || [],
-          notes: harvestData.notes || '',
           selectedProducts: harvestData.selectedProducts || [],
-          productsHarvested: [], // Se llenará al completar la cosecha
+          harvestedProducts: harvestData.harvestedProducts || [],
+          createdBy: currentUser?.uid || '',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
         
-        // Convertir fechas si existen
-        if (harvestData.plannedDate) {
-          if (harvestData.plannedDate instanceof Date) {
-            dbHarvestData.plannedDate = Timestamp.fromDate(harvestData.plannedDate);
-          }
+        // Convertir fechas si es necesario
+        if (harvestData.plannedDate instanceof Date) {
+          harvestDocData.plannedDate = Timestamp.fromDate(harvestData.plannedDate);
         }
         
-        // Insertar cosecha en Firestore
+        if (harvestData.harvestDate instanceof Date) {
+          harvestDocData.harvestDate = Timestamp.fromDate(harvestData.harvestDate);
+        }
+        
+        // Crear cosecha
         const harvestRef = doc(collection(db, 'harvests'));
-        transaction.set(harvestRef, dbHarvestData);
+        transaction.set(harvestRef, harvestDocData);
         
         return harvestRef.id;
       });
@@ -214,46 +354,45 @@ export function HarvestProvider({ children }) {
       await loadHarvests();
       
       return harvestId;
-    } catch (error) {
-      console.error('Error al añadir cosecha:', error);
-      setError('Error al añadir cosecha: ' + error.message);
+    } catch (error: any) {
+      console.error('Error al crear cosecha:', error);
+      setError('Error al crear cosecha: ' + error.message);
       throw error;
     }
-  }, [loadHarvests]);
+  }, [currentUser, loadHarvests]);
 
   // Actualizar una cosecha
-  const updateHarvest = useCallback(async (harvestId, harvestData) => {
+  const updateHarvest = useCallback(async (harvestId: string, harvestData: Partial<HarvestData>): Promise<string> => {
     try {
       setError('');
       
-      // Preparar datos para actualizar
+      console.log('Actualizando cosecha:', harvestId, harvestData); // Debug
+      
+      // Preparar datos de actualización
       const updateData = {
         ...harvestData,
         updatedAt: serverTimestamp()
       };
       
-      // Convertir fechas si existen
-      if (harvestData.plannedDate) {
-        if (harvestData.plannedDate instanceof Date) {
-          updateData.plannedDate = Timestamp.fromDate(harvestData.plannedDate);
-        }
+      // Convertir fechas si es necesario
+      if (harvestData.plannedDate instanceof Date) {
+        updateData.plannedDate = Timestamp.fromDate(harvestData.plannedDate);
       }
       
-      // Si viene fecha de cosecha, convertirla
-      if (harvestData.harvestDate) {
-        if (harvestData.harvestDate instanceof Date) {
-          updateData.harvestDate = Timestamp.fromDate(harvestData.harvestDate);
-        }
+      if (harvestData.harvestDate instanceof Date) {
+        updateData.harvestDate = Timestamp.fromDate(harvestData.harvestDate);
       }
       
       // Actualizar cosecha en Firestore
       await updateDoc(doc(db, 'harvests', harvestId), updateData);
       
+      console.log('Cosecha actualizada:', harvestId); // Debug
+      
       // Recargar cosechas
       await loadHarvests();
       
       return harvestId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al actualizar cosecha ${harvestId}:`, error);
       setError('Error al actualizar cosecha: ' + error.message);
       throw error;
@@ -261,30 +400,34 @@ export function HarvestProvider({ children }) {
   }, [loadHarvests]);
 
   // Eliminar una cosecha
-  const deleteHarvest = useCallback(async (harvestId) => {
+  const deleteHarvest = useCallback(async (harvestId: string): Promise<boolean> => {
     try {
       setError('');
       
+      console.log('Eliminando cosecha:', harvestId); // Debug
+      
       // Eliminar cosecha de Firestore
       await deleteDoc(doc(db, 'harvests', harvestId));
+      
+      console.log('Cosecha eliminada:', harvestId); // Debug
       
       // Recargar cosechas
       await loadHarvests();
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al eliminar cosecha ${harvestId}:`, error);
       setError('Error al eliminar cosecha: ' + error.message);
       throw error;
     }
   }, [loadHarvests]);
 
-  // CORREGIDO: Completar una cosecha con adición de productos al inventario
-  const completeHarvest = useCallback(async (harvestId, harvestResults) => {
+  // Completar una cosecha con ingreso de productos al inventario
+  const completeHarvest = useCallback(async (harvestId: string, completionData: CompletionData = {} as CompletionData): Promise<string> => {
     try {
       setError('');
       
-      console.log('Completando cosecha con resultados:', harvestResults); // Debug
+      console.log('Completando cosecha:', harvestId, completionData); // Debug
       
       // Usar transacción para asegurar consistencia
       await runTransaction(db, async (transaction) => {
@@ -298,52 +441,54 @@ export function HarvestProvider({ children }) {
         
         const harvestData = harvestDoc.data();
         
-        // Datos para la actualización de la cosecha
-        const updateData = {
+        console.log('Datos de cosecha:', harvestData); // Debug
+        
+        // Preparar datos de actualización
+        const updateData: any = {
           status: 'completed',
+          actualYield: completionData.actualYield || harvestData?.actualYield || 0,
+          totalHarvested: completionData.totalHarvested || harvestData?.totalHarvested || 0,
           updatedAt: serverTimestamp()
         };
         
-        // Añadir los resultados de la cosecha
-        if (harvestResults) {
-          // Convertir la fecha de cosecha
-          if (harvestResults.harvestDate) {
-            if (harvestResults.harvestDate instanceof Date) {
-              updateData.harvestDate = Timestamp.fromDate(harvestResults.harvestDate);
-            }
-          }
-          
-          // Otros campos de resultados
-          updateData.actualYield = harvestResults.actualYield || 0;
-          updateData.totalHarvested = harvestResults.totalHarvested || null;
-          updateData.totalHarvestedUnit = harvestResults.totalHarvestedUnit || 'kg';
-          updateData.destination = harvestResults.destination || '';
-          updateData.qualityResults = harvestResults.qualityResults || [];
-          updateData.harvestNotes = harvestResults.harvestNotes || '';
-          updateData.productsHarvested = harvestResults.productsHarvested || [];
+        // Agregar fecha de cosecha si se proporciona
+        if (completionData.harvestDate instanceof Date) {
+          updateData.harvestDate = Timestamp.fromDate(completionData.harvestDate);
         }
         
-        // CORREGIDO: Añadir productos cosechados al inventario
-        if (harvestResults.productsHarvested && harvestResults.productsHarvested.length > 0) {
-          console.log('Añadiendo productos cosechados al inventario...'); // Debug
+        // Agregar productos cosechados y notas si se proporcionan
+        if (completionData.harvestedProducts) {
+          updateData.harvestedProducts = completionData.harvestedProducts;
+        }
+        
+        if (completionData.qualityNotes) {
+          updateData.qualityNotes = completionData.qualityNotes;
+        }
+        
+        if (completionData.weatherConditions) {
+          updateData.weatherConditions = completionData.weatherConditions;
+        }
+        
+        // Añadir productos cosechados al inventario
+        if (completionData.harvestedProducts && completionData.harvestedProducts.length > 0) {
+          console.log('Añadiendo productos al inventario...'); // Debug
           
-          for (const harvestedProduct of harvestResults.productsHarvested) {
-            console.log('Procesando producto cosechado:', harvestedProduct); // Debug
-            
+          for (const harvestedProduct of completionData.harvestedProducts) {
             // Crear nuevo producto en el inventario
             const newProductData = {
               name: harvestedProduct.name,
-              category: harvestedProduct.category || 'insumo',
+              code: `COSECHA-${harvestId.substring(0, 8)}`,
+              category: harvestedProduct.category || 'Cosecha',
+              storageType: 'dry',
               unit: harvestedProduct.unit || 'kg',
-              stock: Number(harvestedProduct.quantity) || 0,
+              stock: harvestedProduct.quantity || 0,
               minStock: 0,
-              storageType: 'bolsas',
-              fieldId: harvestData.fieldId || null,
-              warehouseId: harvestedProduct.warehouseId || harvestData.targetWarehouse || null,
-              storageLevel: harvestedProduct.warehouseId ? 'warehouse' : 'field',
+              storageConditions: 'Ambiente',
+              warehouseId: harvestedProduct.warehouseId || harvestData?.targetWarehouse || '',
+              storageLevel: harvestedProduct.storageLevel || 'warehouse',
               lotNumber: `COSECHA-${harvestId.substring(0, 8)}-${Date.now()}`,
-              tags: ['cosecha', harvestData.crop || 'cultivo'],
-              notes: `Producto obtenido de cosecha de ${harvestData.crop || 'cultivo'} el ${new Date().toLocaleDateString()}`,
+              tags: ['cosecha', harvestData?.crop || 'cultivo'],
+              notes: `Producto obtenido de cosecha de ${harvestData?.crop || 'cultivo'} el ${new Date().toLocaleDateString()}`,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
             };
@@ -368,7 +513,7 @@ export function HarvestProvider({ children }) {
       await loadHarvests();
       
       return harvestId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al completar cosecha ${harvestId}:`, error);
       setError('Error al completar cosecha: ' + error.message);
       throw error;
@@ -384,14 +529,14 @@ export function HarvestProvider({ children }) {
     }
 
     loadHarvests()
-      .catch(err => {
+      .catch((err: any) => {
         console.error('Error al cargar datos iniciales de cosechas:', err);
         setError('Error al cargar datos: ' + err.message);
       });
   }, [currentUser, loadHarvests]);
 
   // Valor que se proporcionará a través del contexto
-  const value = {
+  const value: HarvestContextType = {
     harvests,
     loading,
     error,
