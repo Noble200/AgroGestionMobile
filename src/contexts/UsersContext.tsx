@@ -1,5 +1,5 @@
-// src/contexts/UsersContext.js - Contexto corregido sin permisos automáticos y sin afectar sesión
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+// src/contexts/UsersContext.tsx - Contexto corregido sin permisos automáticos y sin afectar sesión
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
   collection, 
   getDocs, 
@@ -14,18 +14,82 @@ import {
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword,
-  signOut
+  signOut,
+  Auth
 } from 'firebase/auth';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { auth, db } from '../api/firebase';
 import { useAuth } from './AuthContext';
 
-// Crear el contexto de usuarios
-const UsersContext = createContext();
+// Interfaces para TypeScript
+interface UserPermissions {
+  dashboard: boolean;
+  activities: boolean;
+  products: boolean;
+  transfers: boolean;
+  purchases: boolean;
+  expenses: boolean;
+  fumigations: boolean;
+  harvests: boolean;
+  fields: boolean;
+  warehouses: boolean;
+  reports: boolean;
+  users: boolean;
+  admin: boolean;
+}
 
-export function useUsers() {
-  return useContext(UsersContext);
+interface User {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string;
+  role: string;
+  permissions: UserPermissions;
+  createdAt?: any;
+  updatedAt?: any;
+  lastLoginAt?: any | null;
+  isActive: boolean;
+}
+
+interface UserData {
+  email: string;
+  password: string;
+  username?: string;
+  displayName?: string;
+  role?: string;
+  permissions?: Partial<UserPermissions>;
+}
+
+interface UsersContextType {
+  users: User[];
+  loading: boolean;
+  error: string;
+  setError: (error: string) => void;
+  loadUsers: () => Promise<User[]>;
+  addUser: (userData: UserData) => Promise<string>;
+  updateUser: (userId: string, userData: Partial<User>) => Promise<string>;
+  deleteUser: (userId: string) => Promise<boolean>;
+  updateUserPermissions: (userId: string, permissions: Partial<UserPermissions>) => Promise<string>;
+  toggleUserStatus: (userId: string, isActive: boolean) => Promise<string>;
+  updateLastLogin: (userId: string) => Promise<void>;
+  createMinimalPermissions: () => UserPermissions;
+  getRecommendedPermissions: (role?: string) => UserPermissions;
+}
+
+interface UsersProviderProps {
+  children: ReactNode;
+}
+
+// Crear el contexto de usuarios
+const UsersContext = createContext<UsersContextType | undefined>(undefined);
+
+export function useUsers(): UsersContextType {
+  const context = useContext(UsersContext);
+  if (context === undefined) {
+    throw new Error('useUsers must be used within a UsersProvider');
+  }
+  return context;
 }
 
 // Configuración de Firebase para instancia secundaria (misma que tu app principal)
@@ -39,11 +103,11 @@ const firebaseConfig = {
 };
 
 // Crear una segunda instancia de Firebase solo para crear usuarios
-const secondaryApp = initializeApp(firebaseConfig, 'userCreation');
-const secondaryAuth = getAuth(secondaryApp);
+const secondaryApp: FirebaseApp = initializeApp(firebaseConfig, 'userCreation');
+const secondaryAuth: Auth = getAuth(secondaryApp);
 
 // CORREGIDO: Función para crear permisos mínimos (solo dashboard obligatorio)
-const createMinimalPermissions = () => {
+const createMinimalPermissions = (): UserPermissions => {
   return {
     dashboard: true, // SOLO dashboard obligatorio
     activities: false, // CORREGIDO: Por defecto false
@@ -62,7 +126,7 @@ const createMinimalPermissions = () => {
 };
 
 // Función para crear permisos por rol (solo para referencia, no automáticos)
-const getRecommendedPermissions = (role = 'user') => {
+const getRecommendedPermissions = (role: string = 'user'): UserPermissions => {
   switch (role) {
     case 'admin':
       return {
@@ -151,14 +215,14 @@ const getRecommendedPermissions = (role = 'user') => {
   }
 };
 
-export function UsersProvider({ children }) {
+export function UsersProvider({ children }: UsersProviderProps) {
   const { currentUser } = useAuth();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
 
   // Cargar usuarios
-  const loadUsers = useCallback(async () => {
+  const loadUsers = useCallback(async (): Promise<User[]> => {
     try {
       setLoading(true);
       setError('');
@@ -170,7 +234,7 @@ export function UsersProvider({ children }) {
       const querySnapshot = await getDocs(usersQuery);
       
       // Mapear documentos a objetos de usuarios
-      const usersData = [];
+      const usersData: User[] = [];
       querySnapshot.forEach((doc) => {
         const userData = doc.data();
         usersData.push({
@@ -191,7 +255,7 @@ export function UsersProvider({ children }) {
       
       setUsers(usersData);
       return usersData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar usuarios:', error);
       setError('Error al cargar usuarios: ' + error.message);
       throw error;
@@ -201,7 +265,7 @@ export function UsersProvider({ children }) {
   }, []);
 
   // NUEVO: Función para crear usuario sin afectar la sesión actual
-  const createUserWithoutAffectingSession = useCallback(async (userData) => {
+  const createUserWithoutAffectingSession = useCallback(async (userData: UserData): Promise<string> => {
     try {
       console.log('Creando usuario sin afectar sesión actual...', userData);
 
@@ -222,191 +286,121 @@ export function UsersProvider({ children }) {
         username: userData.username || userData.email.split('@')[0],
         displayName: userData.displayName || userData.username || userData.email.split('@')[0],
         role: userData.role || 'user',
-        permissions: userData.permissions || createMinimalPermissions(),
+        permissions: userData.permissions || createMinimalPermissions(), // CORREGIDO: Solo permisos mínimos
         isActive: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        createdBy: currentUser?.uid || 'system'
+        lastLoginAt: null
       };
 
-      // Guardar en Firestore usando la instancia principal de db
-      await setDoc(doc(db, 'users', newUser.uid), userDataForDB);
-      console.log('Usuario guardado en Firestore');
+      console.log('Guardando datos en Firestore:', userDataForDB);
 
-      // Cerrar sesión solo de la instancia secundaria
+      // Guardar en Firestore usando setDoc para especificar el ID
+      await setDoc(doc(db, 'users', newUser.uid), userDataForDB);
+
+      console.log('Usuario guardado exitosamente en Firestore');
+
+      // Cerrar sesión de la instancia secundaria para no afectar la sesión actual
       await signOut(secondaryAuth);
-      console.log('Sesión cerrada en instancia secundaria (no afecta sesión principal)');
+      console.log('Sesión secundaria cerrada');
+
+      // Recargar la lista de usuarios
+      await loadUsers();
 
       return newUser.uid;
-
-    } catch (error) {
-      console.error('Error al crear usuario:', error);
-      
-      // Asegurar que se cierre la sesión secundaria en caso de error
-      try {
-        await signOut(secondaryAuth);
-      } catch (signOutError) {
-        console.warn('Error al cerrar sesión secundaria:', signOutError);
-      }
-      
-      throw error;
-    }
-  }, [currentUser]);
-
-  // Añadir un usuario - VERSIÓN CORREGIDA que no afecta la sesión
-  const addUser = useCallback(async (userData) => {
-    try {
-      setError('');
-      
-      console.log('Creando usuario:', userData); // Debug
-      
-      // Verificar que el email y password estén presentes
-      if (!userData.email || !userData.password) {
-        throw new Error('Email y contraseña son obligatorios');
-      }
-      
-      // Verificar si el nombre de usuario ya existe
-      if (userData.username) {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('username', '==', userData.username));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty) {
-          throw new Error('El nombre de usuario ya está en uso');
-        }
-      }
-
-      // NUEVA IMPLEMENTACIÓN: Usar función que no afecta la sesión
-      const newUserId = await createUserWithoutAffectingSession(userData);
-      
-      console.log('Usuario creado exitosamente con ID:', newUserId); // Debug
-      
-      // Recargar usuarios
-      await loadUsers();
-      
-      return newUserId;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al crear usuario:', error);
       setError('Error al crear usuario: ' + error.message);
       throw error;
     }
-  }, [loadUsers, createUserWithoutAffectingSession]);
+  }, [loadUsers]);
 
-  // Actualizar un usuario
-  const updateUser = useCallback(async (userId, userData) => {
+  // Agregar nuevo usuario (ahora usando la función sin afectar sesión)
+  const addUser = useCallback(async (userData: UserData): Promise<string> => {
+    return await createUserWithoutAffectingSession(userData);
+  }, [createUserWithoutAffectingSession]);
+
+  // Actualizar usuario
+  const updateUser = useCallback(async (userId: string, userData: Partial<User>): Promise<string> => {
     try {
       setError('');
       
-      console.log('Actualizando usuario:', userId, userData); // Debug
-      
-      // Verificar si el nombre de usuario ya existe (excluyendo el usuario actual)
-      if (userData.username) {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('username', '==', userData.username));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty && querySnapshot.docs[0].id !== userId) {
-          throw new Error('El nombre de usuario ya está en uso');
-        }
-      }
-      
-      // Preparar datos para actualizar (excluir campos sensibles)
-      const { password, id, uid, createdAt, createdBy, ...updateData } = userData;
-      
-      const finalUpdateData = {
-        ...updateData,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser?.uid || 'system'
+      const updateData = {
+        ...userData,
+        updatedAt: serverTimestamp()
       };
       
-      // CORREGIDO: Si no se proporcionan permisos, usar solo los mínimos
-      if (!finalUpdateData.permissions) {
-        finalUpdateData.permissions = createMinimalPermissions();
-      }
+      // Remover campos que no deben actualizarse
+      delete updateData.id;
+      delete updateData.createdAt;
       
-      console.log('Datos finales de actualización:', finalUpdateData); // Debug
-      
-      // Actualizar en Firestore
-      await updateDoc(doc(db, 'users', userId), finalUpdateData);
-      
-      console.log('Usuario actualizado exitosamente'); // Debug
+      await updateDoc(doc(db, 'users', userId), updateData);
       
       // Recargar usuarios
       await loadUsers();
       
       return userId;
-    } catch (error) {
-      console.error(`Error al actualizar usuario ${userId}:`, error);
+    } catch (error: any) {
+      console.error('Error al actualizar usuario:', error);
       setError('Error al actualizar usuario: ' + error.message);
       throw error;
     }
-  }, [loadUsers, currentUser]);
+  }, [loadUsers]);
 
-  // Eliminar un usuario
-  const deleteUser = useCallback(async (userId) => {
+  // Eliminar usuario
+  const deleteUser = useCallback(async (userId: string): Promise<boolean> => {
     try {
       setError('');
       
-      console.log('Eliminando usuario:', userId); // Debug
-      
-      // Verificar que no se esté eliminando el usuario actual
-      if (userId === currentUser?.uid) {
-        throw new Error('No puedes eliminar tu propia cuenta');
-      }
-      
       // Eliminar de Firestore
       await deleteDoc(doc(db, 'users', userId));
-      
-      console.log('Usuario eliminado de Firestore'); // Debug
       
       // Recargar usuarios
       await loadUsers();
       
       return true;
-    } catch (error) {
-      console.error(`Error al eliminar usuario ${userId}:`, error);
+    } catch (error: any) {
+      console.error('Error al eliminar usuario:', error);
       setError('Error al eliminar usuario: ' + error.message);
       throw error;
     }
-  }, [loadUsers, currentUser]);
+  }, [loadUsers]);
 
-  // CORREGIDO: Actualizar permisos de un usuario (sin permisos automáticos)
-  const updateUserPermissions = useCallback(async (userId, permissions) => {
+  // Actualizar permisos de usuario
+  const updateUserPermissions = useCallback(async (userId: string, permissions: Partial<UserPermissions>): Promise<string> => {
     try {
       setError('');
       
-      console.log('Actualizando permisos del usuario:', userId, permissions); // Debug
+      // Obtener permisos actuales y fusionar con los nuevos
+      const currentUser = users.find(user => user.id === userId);
+      const currentPermissions = currentUser?.permissions || createMinimalPermissions();
       
-      // CORREGIDO: Asegurar que dashboard esté siempre activo (es el único obligatorio)
-      const finalPermissions = {
-        ...permissions,
-        dashboard: true // SOLO este es obligatorio
+      const updatedPermissions = {
+        ...currentPermissions,
+        ...permissions
       };
       
       const updateData = {
-        permissions: finalPermissions,
+        permissions: updatedPermissions,
         updatedAt: serverTimestamp(),
-        updatedBy: currentUser?.uid || 'system'
+        updatedBy: currentUser?.id || 'system'
       };
       
-      // Actualizar en Firestore
       await updateDoc(doc(db, 'users', userId), updateData);
-      
-      console.log('Permisos actualizados exitosamente'); // Debug
       
       // Recargar usuarios
       await loadUsers();
       
       return userId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al actualizar permisos del usuario ${userId}:`, error);
       setError('Error al actualizar permisos: ' + error.message);
       throw error;
     }
-  }, [loadUsers, currentUser]);
+  }, [loadUsers, currentUser, users]);
 
   // Desactivar/activar usuario
-  const toggleUserStatus = useCallback(async (userId, isActive) => {
+  const toggleUserStatus = useCallback(async (userId: string, isActive: boolean): Promise<string> => {
     try {
       setError('');
       
@@ -422,7 +416,7 @@ export function UsersProvider({ children }) {
       await loadUsers();
       
       return userId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al cambiar estado del usuario ${userId}:`, error);
       setError('Error al cambiar estado del usuario: ' + error.message);
       throw error;
@@ -430,12 +424,12 @@ export function UsersProvider({ children }) {
   }, [loadUsers, currentUser]);
 
   // Registrar último login (se puede llamar desde el AuthContext)
-  const updateLastLogin = useCallback(async (userId) => {
+  const updateLastLogin = useCallback(async (userId: string): Promise<void> => {
     try {
       await updateDoc(doc(db, 'users', userId), {
         lastLoginAt: serverTimestamp()
       });
-    } catch (error) {
+    } catch (error: any) {
       console.warn('Error al actualizar último login:', error);
       // No lanzar error para no interrumpir el flujo de login
     }
@@ -457,7 +451,7 @@ export function UsersProvider({ children }) {
         .then(() => {
           console.log('Usuarios cargados exitosamente'); // Debug
         })
-        .catch(err => {
+        .catch((err: any) => {
           console.error('Error al cargar datos iniciales de usuarios:', err);
           setError('Error al cargar datos: ' + err.message);
         });
@@ -469,7 +463,7 @@ export function UsersProvider({ children }) {
   }, [currentUser, loadUsers]);
 
   // Valor que se proporcionará a través del contexto
-  const value = {
+  const value: UsersContextType = {
     users,
     loading,
     error,

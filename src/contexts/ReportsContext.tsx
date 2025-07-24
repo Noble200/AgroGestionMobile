@@ -1,5 +1,5 @@
-// src/contexts/ReportsContext.js - Contexto para gestión de reportes
-import React, { createContext, useContext, useState, useCallback } from 'react';
+// src/contexts/ReportsContext.tsx - Contexto para gestión de reportes
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { 
   collection, 
   getDocs, 
@@ -11,20 +11,77 @@ import {
 import { db } from '../api/firebase';
 import { useAuth } from './AuthContext';
 
-// Crear el contexto de reportes
-const ReportsContext = createContext();
-
-export function useReports() {
-  return useContext(ReportsContext);
+// Interfaces para TypeScript
+interface ReportFilters {
+  startDate?: string;
+  endDate?: string;
+  category?: string;
+  status?: string;
 }
 
-export function ReportsProvider({ children }) {
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  stock: number;
+  minStock: number;
+  price: number;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  expiryDate: Date | null;
+}
+
+interface Activity {
+  id: string;
+  type: string;
+  description: string;
+  date: Date;
+  status: string;
+  details: any;
+}
+
+interface InventoryReport {
+  fields: any[];
+  warehouses: any[];
+}
+
+interface ReportsContextType {
+  loading: boolean;
+  error: string;
+  setError: (error: string) => void;
+  getProductsReport: (filters?: ReportFilters) => Promise<Product[]>;
+  getTransfersReport: (filters?: ReportFilters) => Promise<any[]>;
+  getFumigationsReport: (filters?: ReportFilters) => Promise<any[]>;
+  getHarvestsReport: (filters?: ReportFilters) => Promise<any[]>;
+  getPurchasesReport: (filters?: ReportFilters) => Promise<any[]>;
+  getExpensesReport: (filters?: ReportFilters) => Promise<any[]>;
+  getActivitiesReport: (filters?: ReportFilters) => Promise<Activity[]>;
+  getInventoryReport: () => Promise<InventoryReport>;
+}
+
+interface ReportsProviderProps {
+  children: ReactNode;
+}
+
+// Crear el contexto de reportes
+const ReportsContext = createContext<ReportsContextType | undefined>(undefined);
+
+export function useReports(): ReportsContextType {
+  const context = useContext(ReportsContext);
+  if (context === undefined) {
+    throw new Error('useReports must be used within a ReportsProvider');
+  }
+  return context;
+}
+
+export function ReportsProvider({ children }: ReportsProviderProps) {
   const { currentUser } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
   // Función para obtener datos de productos con filtros
-  const getProductsReport = useCallback(async (filters = {}) => {
+  const getProductsReport = useCallback(async (filters: ReportFilters = {}): Promise<Product[]> => {
     try {
       setLoading(true);
       setError('');
@@ -47,7 +104,7 @@ export function ReportsProvider({ children }) {
       }
       
       const querySnapshot = await getDocs(productsQuery);
-      const products = [];
+      const products: Product[] = [];
       
       querySnapshot.forEach((doc) => {
         const productData = doc.data();
@@ -58,36 +115,11 @@ export function ReportsProvider({ children }) {
           createdAt: productData.createdAt ? new Date(productData.createdAt.seconds * 1000) : null,
           updatedAt: productData.updatedAt ? new Date(productData.updatedAt.seconds * 1000) : null,
           expiryDate: productData.expiryDate ? new Date(productData.expiryDate.seconds * 1000) : null
-        });
+        } as Product);
       });
       
-      // Aplicar filtros adicionales
-      let filteredProducts = products;
-      
-      if (filters.category && filters.category !== 'all') {
-        filteredProducts = filteredProducts.filter(p => p.category === filters.category);
-      }
-      
-      if (filters.stockStatus && filters.stockStatus !== 'all') {
-        filteredProducts = filteredProducts.filter(p => {
-          const currentStock = p.stock || 0;
-          const minStock = p.minStock || 0;
-          
-          switch (filters.stockStatus) {
-            case 'low': return currentStock <= minStock && minStock > 0;
-            case 'empty': return currentStock === 0;
-            case 'ok': return currentStock > minStock;
-            default: return true;
-          }
-        });
-      }
-      
-      if (filters.fieldId && filters.fieldId !== 'all') {
-        filteredProducts = filteredProducts.filter(p => p.fieldId === filters.fieldId);
-      }
-      
-      return filteredProducts;
-    } catch (error) {
+      return products;
+    } catch (error: any) {
       console.error('Error al generar reporte de productos:', error);
       setError('Error al generar reporte: ' + error.message);
       throw error;
@@ -96,14 +128,15 @@ export function ReportsProvider({ children }) {
     }
   }, []);
 
-  // Función para obtener datos de transferencias
-  const getTransfersReport = useCallback(async (filters = {}) => {
+  // Función para obtener datos de transferencias con filtros
+  const getTransfersReport = useCallback(async (filters: ReportFilters = {}): Promise<any[]> => {
     try {
       setLoading(true);
       setError('');
       
       let transfersQuery = query(collection(db, 'transfers'), orderBy('createdAt', 'desc'));
       
+      // Aplicar filtros de fecha si existen
       if (filters.startDate && filters.endDate) {
         const startDate = Timestamp.fromDate(new Date(filters.startDate));
         const endDate = Timestamp.fromDate(new Date(filters.endDate));
@@ -117,7 +150,7 @@ export function ReportsProvider({ children }) {
       }
       
       const querySnapshot = await getDocs(transfersQuery);
-      const transfers = [];
+      const transfers: any[] = [];
       
       querySnapshot.forEach((doc) => {
         const transferData = doc.data();
@@ -125,30 +158,12 @@ export function ReportsProvider({ children }) {
           id: doc.id,
           ...transferData,
           createdAt: transferData.createdAt ? new Date(transferData.createdAt.seconds * 1000) : null,
-          requestDate: transferData.requestDate ? new Date(transferData.requestDate.seconds * 1000) : null,
-          approvedDate: transferData.approvedDate ? new Date(transferData.approvedDate.seconds * 1000) : null,
-          shippedDate: transferData.shippedDate ? new Date(transferData.shippedDate.seconds * 1000) : null,
-          receivedDate: transferData.receivedDate ? new Date(transferData.receivedDate.seconds * 1000) : null
+          updatedAt: transferData.updatedAt ? new Date(transferData.updatedAt.seconds * 1000) : null
         });
       });
       
-      // Aplicar filtros adicionales
-      let filteredTransfers = transfers;
-      
-      if (filters.status && filters.status !== 'all') {
-        filteredTransfers = filteredTransfers.filter(t => t.status === filters.status);
-      }
-      
-      if (filters.sourceWarehouse && filters.sourceWarehouse !== 'all') {
-        filteredTransfers = filteredTransfers.filter(t => t.sourceWarehouseId === filters.sourceWarehouse);
-      }
-      
-      if (filters.targetWarehouse && filters.targetWarehouse !== 'all') {
-        filteredTransfers = filteredTransfers.filter(t => t.targetWarehouseId === filters.targetWarehouse);
-      }
-      
-      return filteredTransfers;
-    } catch (error) {
+      return transfers;
+    } catch (error: any) {
       console.error('Error al generar reporte de transferencias:', error);
       setError('Error al generar reporte: ' + error.message);
       throw error;
@@ -157,58 +172,43 @@ export function ReportsProvider({ children }) {
     }
   }, []);
 
-  // Función para obtener datos de fumigaciones
-  const getFumigationsReport = useCallback(async (filters = {}) => {
+  // Función para obtener datos de fumigaciones con filtros
+  const getFumigationsReport = useCallback(async (filters: ReportFilters = {}): Promise<any[]> => {
     try {
       setLoading(true);
       setError('');
       
-      let fumigationsQuery = query(collection(db, 'fumigations'), orderBy('applicationDate', 'desc'));
+      let fumigationsQuery = query(collection(db, 'fumigations'), orderBy('createdAt', 'desc'));
       
+      // Aplicar filtros de fecha si existen
       if (filters.startDate && filters.endDate) {
         const startDate = Timestamp.fromDate(new Date(filters.startDate));
         const endDate = Timestamp.fromDate(new Date(filters.endDate));
         
         fumigationsQuery = query(
           collection(db, 'fumigations'),
-          where('applicationDate', '>=', startDate),
-          where('applicationDate', '<=', endDate),
-          orderBy('applicationDate', 'desc')
+          where('createdAt', '>=', startDate),
+          where('createdAt', '<=', endDate),
+          orderBy('createdAt', 'desc')
         );
       }
       
       const querySnapshot = await getDocs(fumigationsQuery);
-      const fumigations = [];
+      const fumigations: any[] = [];
       
       querySnapshot.forEach((doc) => {
         const fumigationData = doc.data();
         fumigations.push({
           id: doc.id,
           ...fumigationData,
-          applicationDate: fumigationData.applicationDate ? new Date(fumigationData.applicationDate.seconds * 1000) : null,
           createdAt: fumigationData.createdAt ? new Date(fumigationData.createdAt.seconds * 1000) : null,
-          startDateTime: fumigationData.startDateTime ? new Date(fumigationData.startDateTime.seconds * 1000) : null,
-          endDateTime: fumigationData.endDateTime ? new Date(fumigationData.endDateTime.seconds * 1000) : null
+          updatedAt: fumigationData.updatedAt ? new Date(fumigationData.updatedAt.seconds * 1000) : null,
+          date: fumigationData.date ? new Date(fumigationData.date.seconds * 1000) : null
         });
       });
       
-      // Aplicar filtros adicionales
-      let filteredFumigations = fumigations;
-      
-      if (filters.status && filters.status !== 'all') {
-        filteredFumigations = filteredFumigations.filter(f => f.status === filters.status);
-      }
-      
-      if (filters.crop && filters.crop !== 'all') {
-        filteredFumigations = filteredFumigations.filter(f => f.crop === filters.crop);
-      }
-      
-      if (filters.field && filters.field !== 'all') {
-        filteredFumigations = filteredFumigations.filter(f => f.fieldId === filters.field);
-      }
-      
-      return filteredFumigations;
-    } catch (error) {
+      return fumigations;
+    } catch (error: any) {
       console.error('Error al generar reporte de fumigaciones:', error);
       setError('Error al generar reporte: ' + error.message);
       throw error;
@@ -217,57 +217,43 @@ export function ReportsProvider({ children }) {
     }
   }, []);
 
-  // Función para obtener datos de cosechas
-  const getHarvestsReport = useCallback(async (filters = {}) => {
+  // Función para obtener datos de cosechas con filtros
+  const getHarvestsReport = useCallback(async (filters: ReportFilters = {}): Promise<any[]> => {
     try {
       setLoading(true);
       setError('');
       
-      let harvestsQuery = query(collection(db, 'harvests'), orderBy('plannedDate', 'desc'));
+      let harvestsQuery = query(collection(db, 'harvests'), orderBy('createdAt', 'desc'));
       
+      // Aplicar filtros de fecha si existen
       if (filters.startDate && filters.endDate) {
         const startDate = Timestamp.fromDate(new Date(filters.startDate));
         const endDate = Timestamp.fromDate(new Date(filters.endDate));
         
         harvestsQuery = query(
           collection(db, 'harvests'),
-          where('plannedDate', '>=', startDate),
-          where('plannedDate', '<=', endDate),
-          orderBy('plannedDate', 'desc')
+          where('createdAt', '>=', startDate),
+          where('createdAt', '<=', endDate),
+          orderBy('createdAt', 'desc')
         );
       }
       
       const querySnapshot = await getDocs(harvestsQuery);
-      const harvests = [];
+      const harvests: any[] = [];
       
       querySnapshot.forEach((doc) => {
         const harvestData = doc.data();
         harvests.push({
           id: doc.id,
           ...harvestData,
-          plannedDate: harvestData.plannedDate ? new Date(harvestData.plannedDate.seconds * 1000) : null,
-          harvestDate: harvestData.harvestDate ? new Date(harvestData.harvestDate.seconds * 1000) : null,
-          createdAt: harvestData.createdAt ? new Date(harvestData.createdAt.seconds * 1000) : null
+          createdAt: harvestData.createdAt ? new Date(harvestData.createdAt.seconds * 1000) : null,
+          updatedAt: harvestData.updatedAt ? new Date(harvestData.updatedAt.seconds * 1000) : null,
+          date: harvestData.date ? new Date(harvestData.date.seconds * 1000) : null
         });
       });
       
-      // Aplicar filtros adicionales
-      let filteredHarvests = harvests;
-      
-      if (filters.status && filters.status !== 'all') {
-        filteredHarvests = filteredHarvests.filter(h => h.status === filters.status);
-      }
-      
-      if (filters.crop && filters.crop !== 'all') {
-        filteredHarvests = filteredHarvests.filter(h => h.crop === filters.crop);
-      }
-      
-      if (filters.field && filters.field !== 'all') {
-        filteredHarvests = filteredHarvests.filter(h => h.fieldId === filters.field);
-      }
-      
-      return filteredHarvests;
-    } catch (error) {
+      return harvests;
+    } catch (error: any) {
       console.error('Error al generar reporte de cosechas:', error);
       setError('Error al generar reporte: ' + error.message);
       throw error;
@@ -276,14 +262,15 @@ export function ReportsProvider({ children }) {
     }
   }, []);
 
-  // Función para obtener datos de compras
-  const getPurchasesReport = useCallback(async (filters = {}) => {
+  // Función para obtener datos de compras con filtros
+  const getPurchasesReport = useCallback(async (filters: ReportFilters = {}): Promise<any[]> => {
     try {
       setLoading(true);
       setError('');
       
       let purchasesQuery = query(collection(db, 'purchases'), orderBy('createdAt', 'desc'));
       
+      // Aplicar filtros de fecha si existen
       if (filters.startDate && filters.endDate) {
         const startDate = Timestamp.fromDate(new Date(filters.startDate));
         const endDate = Timestamp.fromDate(new Date(filters.endDate));
@@ -297,31 +284,20 @@ export function ReportsProvider({ children }) {
       }
       
       const querySnapshot = await getDocs(purchasesQuery);
-      const purchases = [];
+      const purchases: any[] = [];
       
       querySnapshot.forEach((doc) => {
         const purchaseData = doc.data();
         purchases.push({
           id: doc.id,
           ...purchaseData,
-          purchaseDate: purchaseData.purchaseDate ? new Date(purchaseData.purchaseDate.seconds * 1000) : null,
-          createdAt: purchaseData.createdAt ? new Date(purchaseData.createdAt.seconds * 1000) : null
+          createdAt: purchaseData.createdAt ? new Date(purchaseData.createdAt.seconds * 1000) : null,
+          updatedAt: purchaseData.updatedAt ? new Date(purchaseData.updatedAt.seconds * 1000) : null
         });
       });
       
-      // Aplicar filtros adicionales
-      let filteredPurchases = purchases;
-      
-      if (filters.status && filters.status !== 'all') {
-        filteredPurchases = filteredPurchases.filter(p => p.status === filters.status);
-      }
-      
-      if (filters.supplier && filters.supplier !== 'all') {
-        filteredPurchases = filteredPurchases.filter(p => p.supplier === filters.supplier);
-      }
-      
-      return filteredPurchases;
-    } catch (error) {
+      return purchases;
+    } catch (error: any) {
       console.error('Error al generar reporte de compras:', error);
       setError('Error al generar reporte: ' + error.message);
       throw error;
@@ -330,14 +306,15 @@ export function ReportsProvider({ children }) {
     }
   }, []);
 
-  // Función para obtener datos de gastos
-  const getExpensesReport = useCallback(async (filters = {}) => {
+  // Función para obtener datos de gastos con filtros
+  const getExpensesReport = useCallback(async (filters: ReportFilters = {}): Promise<any[]> => {
     try {
       setLoading(true);
       setError('');
       
       let expensesQuery = query(collection(db, 'expenses'), orderBy('createdAt', 'desc'));
       
+      // Aplicar filtros de fecha si existen
       if (filters.startDate && filters.endDate) {
         const startDate = Timestamp.fromDate(new Date(filters.startDate));
         const endDate = Timestamp.fromDate(new Date(filters.endDate));
@@ -351,33 +328,20 @@ export function ReportsProvider({ children }) {
       }
       
       const querySnapshot = await getDocs(expensesQuery);
-      const expenses = [];
+      const expenses: any[] = [];
       
       querySnapshot.forEach((doc) => {
         const expenseData = doc.data();
         expenses.push({
           id: doc.id,
           ...expenseData,
-          date: expenseData.date ? new Date(expenseData.date.seconds * 1000) : null,
-          createdAt: expenseData.createdAt ? new Date(expenseData.createdAt.seconds * 1000) : null
+          createdAt: expenseData.createdAt ? new Date(expenseData.createdAt.seconds * 1000) : null,
+          updatedAt: expenseData.updatedAt ? new Date(expenseData.updatedAt.seconds * 1000) : null
         });
       });
       
-      // Aplicar filtros adicionales
-      let filteredExpenses = expenses;
-      
-      if (filters.type && filters.type !== 'all') {
-        filteredExpenses = filteredExpenses.filter(e => e.type === filters.type);
-      }
-      
-      if (filters.category && filters.category !== 'all') {
-        filteredExpenses = filteredExpenses.filter(e => 
-          e.category === filters.category || e.productCategory === filters.category
-        );
-      }
-      
-      return filteredExpenses;
-    } catch (error) {
+      return expenses;
+    } catch (error: any) {
       console.error('Error al generar reporte de gastos:', error);
       setError('Error al generar reporte: ' + error.message);
       throw error;
@@ -386,105 +350,110 @@ export function ReportsProvider({ children }) {
     }
   }, []);
 
-  // Función para obtener reporte de actividades generales
-  const getActivitiesReport = useCallback(async (filters = {}) => {
+  // Función para obtener un reporte unificado de todas las actividades
+  const getActivitiesReport = useCallback(async (filters: ReportFilters = {}): Promise<Activity[]> => {
     try {
       setLoading(true);
       setError('');
       
-      console.log('Generando reporte de actividades con filtros:', filters);
+      console.log('Generando reporte de actividades...');
       
-      const activities = [];
+      // Obtener datos de todas las actividades
+      const [transfers, fumigations, harvests, purchases, expenses] = await Promise.all([
+        getTransfersReport(filters),
+        getFumigationsReport(filters),
+        getHarvestsReport(filters),
+        getPurchasesReport(filters),
+        getExpensesReport(filters)
+      ]);
       
-      // Obtener transferencias
-      const transfers = await getTransfersReport(filters);
+      const activities: Activity[] = [];
+      
+      // Procesar transferencias
       transfers.forEach(transfer => {
         activities.push({
           id: transfer.id,
           type: 'transfer',
-          title: `Transferencia ${transfer.transferNumber || transfer.id}`,
-          description: `Transferencia de ${transfer.products?.length || 0} productos`,
-          date: transfer.requestDate || transfer.createdAt,
-          status: transfer.status,
+          description: `Transferencia de ${transfer.quantity} ${transfer.unit} de ${transfer.productName}`,
+          date: transfer.createdAt || new Date(),
+          status: transfer.status || 'completed',
           details: {
-            from: transfer.sourceWarehouse?.name || 'Origen desconocido',
-            to: transfer.targetWarehouse?.name || 'Destino desconocido',
-            products: transfer.products?.length || 0,
-            requestedBy: transfer.requestedBy
+            productName: transfer.productName,
+            quantity: transfer.quantity,
+            unit: transfer.unit,
+            from: transfer.fromLocationName,
+            to: transfer.toLocationName,
+            createdBy: transfer.createdBy
           }
         });
       });
       
-      // Obtener fumigaciones
-      const fumigations = await getFumigationsReport(filters);
+      // Procesar fumigaciones
       fumigations.forEach(fumigation => {
         activities.push({
           id: fumigation.id,
           type: 'fumigation',
-          title: `Fumigación ${fumigation.orderNumber || fumigation.id}`,
-          description: `Fumigación en ${fumigation.establishment} - ${fumigation.crop}`,
-          date: fumigation.applicationDate || fumigation.createdAt,
-          status: fumigation.status,
+          description: `Fumigación en ${fumigation.fieldName} - ${fumigation.pestName}`,
+          date: fumigation.date || fumigation.createdAt || new Date(),
+          status: fumigation.status || 'completed',
           details: {
-            establishment: fumigation.establishment,
-            crop: fumigation.crop,
-            surface: fumigation.totalSurface,
-            applicator: fumigation.applicator,
-            products: fumigation.selectedProducts?.length || 0
+            fieldName: fumigation.fieldName,
+            pestName: fumigation.pestName,
+            quantity: fumigation.quantity,
+            unit: fumigation.unit,
+            method: fumigation.method,
+            createdBy: fumigation.createdBy
           }
         });
       });
       
-      // Obtener cosechas
-      const harvests = await getHarvestsReport(filters);
+      // Procesar cosechas
       harvests.forEach(harvest => {
         activities.push({
           id: harvest.id,
           type: 'harvest',
-          title: `Cosecha de ${harvest.crop || 'cultivo'}`,
-          description: `Cosecha en ${harvest.field?.name || 'campo'} - ${harvest.totalArea || 0} ha`,
-          date: harvest.plannedDate || harvest.createdAt,
-          status: harvest.status,
+          description: `Cosecha de ${harvest.quantity} ${harvest.unit} de ${harvest.productName}`,
+          date: harvest.date || harvest.createdAt || new Date(),
+          status: harvest.status || 'completed',
           details: {
-            field: harvest.field?.name || 'Campo desconocido',
-            crop: harvest.crop,
-            area: harvest.totalArea,
-            estimatedYield: harvest.estimatedYield,
-            actualYield: harvest.actualYield
+            productName: harvest.productName,
+            quantity: harvest.quantity,
+            unit: harvest.unit,
+            fieldName: harvest.fieldName,
+            quality: harvest.quality,
+            createdBy: harvest.createdBy
           }
         });
       });
       
-      // Obtener compras
-      const purchases = await getPurchasesReport(filters);
+      // Procesar compras
       purchases.forEach(purchase => {
         activities.push({
           id: purchase.id,
           type: 'purchase',
-          title: `Compra ${purchase.purchaseNumber || purchase.id}`,
-          description: `Compra a ${purchase.supplier} - ${purchase.products?.length || 0} productos`,
-          date: purchase.purchaseDate || purchase.createdAt,
-          status: purchase.status,
+          description: `Compra de ${purchase.quantity} ${purchase.unit} de ${purchase.productName}`,
+          date: purchase.createdAt || new Date(),
+          status: 'completed',
           details: {
-            supplier: purchase.supplier,
-            products: purchase.products?.length || 0,
+            productName: purchase.productName,
+            quantity: purchase.quantity,
+            unit: purchase.unit,
             totalAmount: purchase.totalAmount,
+            supplier: purchase.supplier,
             createdBy: purchase.createdBy
           }
         });
       });
       
-      // Obtener gastos
-      const expenses = await getExpensesReport(filters);
+      // Procesar gastos
       expenses.forEach(expense => {
         activities.push({
           id: expense.id,
           type: 'expense',
-          title: `Gasto ${expense.expenseNumber || expense.id}`,
-          description: expense.type === 'product' 
-            ? `Venta de ${expense.productName}` 
+          description: expense.type === 'product' ? 
+            `Venta de ${expense.productName}` 
             : expense.description,
-          date: expense.date || expense.createdAt,
+          date: expense.date || expense.createdAt || new Date(),
           status: 'completed',
           details: {
             type: expense.type,
@@ -499,11 +468,11 @@ export function ReportsProvider({ children }) {
       activities.sort((a, b) => {
         const dateA = a.date ? new Date(a.date) : new Date(0);
         const dateB = b.date ? new Date(b.date) : new Date(0);
-        return dateB - dateA;
+        return dateB.getTime() - dateA.getTime();
       });
       
       return activities;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al generar reporte de actividades:', error);
       setError('Error al generar reporte: ' + error.message);
       throw error;
@@ -513,27 +482,27 @@ export function ReportsProvider({ children }) {
   }, [getTransfersReport, getFumigationsReport, getHarvestsReport, getPurchasesReport, getExpensesReport]);
 
   // Función para obtener datos de campos y almacenes
-  const getInventoryReport = useCallback(async () => {
+  const getInventoryReport = useCallback(async (): Promise<InventoryReport> => {
     try {
       setLoading(true);
       setError('');
       
       // Obtener campos
       const fieldsSnapshot = await getDocs(query(collection(db, 'fields'), orderBy('name')));
-      const fields = [];
+      const fields: any[] = [];
       fieldsSnapshot.forEach(doc => {
         fields.push({ id: doc.id, ...doc.data() });
       });
       
       // Obtener almacenes
       const warehousesSnapshot = await getDocs(query(collection(db, 'warehouses'), orderBy('name')));
-      const warehouses = [];
+      const warehouses: any[] = [];
       warehousesSnapshot.forEach(doc => {
         warehouses.push({ id: doc.id, ...doc.data() });
       });
       
       return { fields, warehouses };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al generar reporte de inventario:', error);
       setError('Error al generar reporte: ' + error.message);
       throw error;
@@ -543,7 +512,7 @@ export function ReportsProvider({ children }) {
   }, []);
 
   // Valor que se proporcionará a través del contexto
-  const value = {
+  const value: ReportsContextType = {
     loading,
     error,
     setError,

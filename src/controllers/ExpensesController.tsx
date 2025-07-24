@@ -1,9 +1,59 @@
-// src/controllers/ExpensesController.js - Controlador para gastos con logging de actividades
+// src/controllers/ExpensesController.tsx - Controlador para gastos con logging de actividades
 import { useState, useEffect, useCallback } from 'react';
 import { useExpenses } from '../contexts/ExpenseContext';
 import { useStock } from '../contexts/StockContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useActivityLogger } from '../hooks/useActivityLogger'; // NUEVO: Hook para logging
+import { useActivityLogger } from '../hooks/useActivityLogger';
+
+// Tipos TypeScript
+interface FilterOptions {
+  type: string;
+  category: string;
+  dateRange: {
+    start: Date | null;
+    end: Date | null;
+  };
+  searchTerm: string;
+}
+
+interface FilterSelectOption {
+  value: string;
+  label: string;
+}
+
+interface Statistics {
+  totalExpenses: number;
+  productExpenses: number;
+  miscExpenses: number;
+  totalAmount: number;
+  totalProductsSold: number;
+  thisMonthExpenses: number;
+  thisMonthAmount: number;
+}
+
+interface ExpenseData {
+  expenseNumber?: string;
+  type: 'product' | 'misc';
+  date: Date | any;
+  amount?: number;
+  totalAmount?: number;
+  category?: string;
+  productCategory?: string;
+  productName?: string;
+  productId?: string;
+  supplier?: string;
+  description?: string;
+  quantitySold?: number;
+  unitPrice?: number;
+  saleReason?: string;
+  notes?: string;
+}
+
+interface Expense extends ExpenseData {
+  id: string;
+  createdBy?: string;
+  stockAdjusted?: boolean;
+}
 
 const useExpensesController = () => {
   const {
@@ -24,24 +74,24 @@ const useExpensesController = () => {
   } = useStock();
 
   const { currentUser } = useAuth();
-  const { logExpense } = useActivityLogger(); // NUEVO: Hook de logging
+  const { logExpense } = useActivityLogger();
 
   // Estados locales
-  const [selectedExpense, setSelectedExpense] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState(''); // 'add-expense', 'edit-expense', 'view-expense'
-  const [filters, setFilters] = useState({
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>(''); // 'add-expense', 'edit-expense', 'view-expense'
+  const [filters, setFilters] = useState<FilterOptions>({
     type: 'all',
     category: 'all',
     dateRange: { start: null, end: null },
     searchTerm: ''
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filteredExpensesList, setFilteredExpensesList] = useState([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+  const [filteredExpensesList, setFilteredExpensesList] = useState<Expense[]>([]);
 
   // Cargar datos necesarios
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (): Promise<void> => {
     try {
       setError('');
       
@@ -50,7 +100,7 @@ const useExpensesController = () => {
         products.length === 0 ? loadProducts() : Promise.resolve(),
         loadExpenses()
       ]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al cargar datos:', err);
       setError('Error al cargar datos: ' + err.message);
     }
@@ -77,10 +127,10 @@ const useExpensesController = () => {
   }, [loadData]);
 
   // Filtrar gastos según filtros aplicados
-  const getFilteredExpenses = useCallback(() => {
+  const getFilteredExpenses = useCallback((): Expense[] => {
     if (!Array.isArray(expenses) || expenses.length === 0) return [];
     
-    return expenses.filter(expense => {
+    return expenses.filter((expense: Expense) => {
       // Filtro por tipo
       if (filters.type !== 'all' && expense.type !== filters.type) {
         return false;
@@ -88,53 +138,60 @@ const useExpensesController = () => {
       
       // Filtro por categoría
       if (filters.category !== 'all') {
-        const expenseCategory = expense.type === 'product' ? expense.productCategory : expense.category;
+        const expenseCategory = expense.type === 'product' ? 
+          expense.productCategory : expense.category;
         if (expenseCategory !== filters.category) {
           return false;
         }
       }
       
-      // Filtro por fecha
+      // Filtro por rango de fechas
       if (filters.dateRange.start || filters.dateRange.end) {
-        const expenseDate = expense.date
+        const expenseDate = expense.date 
           ? new Date(expense.date.seconds ? expense.date.seconds * 1000 : expense.date)
           : null;
-        
+          
         if (!expenseDate) return false;
         
-        if (filters.dateRange.start) {
-          const startDate = new Date(filters.dateRange.start);
-          if (expenseDate < startDate) return false;
+        if (filters.dateRange.start && expenseDate < filters.dateRange.start) {
+          return false;
         }
         
-        if (filters.dateRange.end) {
-          const endDate = new Date(filters.dateRange.end);
-          endDate.setHours(23, 59, 59, 999); // Ajustar al final del día
-          if (expenseDate > endDate) return false;
+        if (filters.dateRange.end && expenseDate > filters.dateRange.end) {
+          return false;
         }
       }
       
-      // Búsqueda por texto
+      // Filtro por término de búsqueda
       if (filters.searchTerm) {
-        const term = filters.searchTerm.toLowerCase();
-        return (
-          (expense.expenseNumber && expense.expenseNumber.toLowerCase().includes(term)) ||
-          (expense.productName && expense.productName.toLowerCase().includes(term)) ||
-          (expense.description && expense.description.toLowerCase().includes(term)) ||
-          (expense.supplier && expense.supplier.toLowerCase().includes(term))
+        const searchTerm = filters.searchTerm.toLowerCase();
+        const searchableFields = [
+          expense.expenseNumber,
+          expense.description,
+          expense.productName,
+          expense.supplier,
+          expense.notes,
+          expense.category,
+          expense.productCategory
+        ].filter(Boolean);
+        
+        const matchesSearch = searchableFields.some(field => 
+          field && field.toString().toLowerCase().includes(searchTerm)
         );
+        
+        if (!matchesSearch) return false;
       }
       
       return true;
     });
   }, [expenses, filters]);
 
-  // Actualizar gastos filtrados cuando cambian los filtros o gastos
+  // Actualizar lista filtrada cuando cambien los gastos o filtros
   useEffect(() => {
     setFilteredExpensesList(getFilteredExpenses());
   }, [getFilteredExpenses]);
 
-  // Abrir diálogo para añadir gasto
+  // Abrir diálogo para agregar gasto
   const handleAddExpense = useCallback(() => {
     setSelectedExpense(null);
     setDialogType('add-expense');
@@ -142,158 +199,82 @@ const useExpensesController = () => {
   }, []);
 
   // Abrir diálogo para editar gasto
-  const handleEditExpense = useCallback((expense) => {
+  const handleEditExpense = useCallback((expense: Expense) => {
     setSelectedExpense(expense);
     setDialogType('edit-expense');
     setDialogOpen(true);
   }, []);
 
-  // Abrir diálogo para ver detalles de gasto
-  const handleViewExpense = useCallback((expense) => {
+  // Abrir diálogo para ver gasto
+  const handleViewExpense = useCallback((expense: Expense) => {
     setSelectedExpense(expense);
     setDialogType('view-expense');
     setDialogOpen(true);
   }, []);
 
-  // MODIFICADO: Confirmar eliminación de gasto con logging
-  const handleDeleteExpense = useCallback(async (expenseId) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer.')) {
-      try {
-        // Obtener datos del gasto antes de eliminarlo
-        const expenseToDelete = expenses.find(e => e.id === expenseId);
-        
-        await deleteExpense(expenseId);
-        
-        // NUEVO: Registrar actividad de eliminación
-        if (expenseToDelete) {
-          await logExpense('delete', {
-            id: expenseId,
-            expenseNumber: expenseToDelete.expenseNumber,
-            type: expenseToDelete.type
-          }, {
-            amount: expenseToDelete.type === 'product' ? expenseToDelete.totalAmount : expenseToDelete.amount,
-            category: expenseToDelete.type === 'product' ? expenseToDelete.productCategory : expenseToDelete.category,
-            productName: expenseToDelete.productName,
-            supplier: expenseToDelete.supplier,
-            description: expenseToDelete.description,
-            quantitySold: expenseToDelete.quantitySold,
-            deletedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
-            reason: 'Eliminación manual desde panel de gastos'
-          });
-        }
-        
-        // Cerrar el diálogo si estaba abierto para este gasto
-        if (selectedExpense && selectedExpense.id === expenseId) {
-          setDialogOpen(false);
-        }
-      } catch (err) {
-        console.error('Error al eliminar gasto:', err);
-        setError('Error al eliminar gasto: ' + err.message);
-      }
-    }
-  }, [deleteExpense, selectedExpense, expenses, logExpense, currentUser]);
-
-  // MODIFICADO: Guardar gasto con logging
-  const handleSaveExpense = useCallback(async (expenseData) => {
+  // Eliminar gasto
+  const handleDeleteExpense = useCallback(async (expenseId: string): Promise<void> => {
     try {
-      let expenseId;
+      setError('');
       
-      if (dialogType === 'add-expense') {
-        // Crear nuevo gasto
-        expenseId = await addExpense(expenseData);
-        
-        // NUEVO: Registrar actividad de creación
-        await logExpense('create', {
+      // Buscar el gasto antes de eliminarlo para el logging
+      const expenseToDelete = expenses.find((exp: Expense) => exp.id === expenseId);
+      
+      await deleteExpense(expenseId);
+      
+      // Registrar actividad de eliminación
+      if (expenseToDelete) {
+        await logExpense('delete', {
           id: expenseId,
-          expenseNumber: expenseData.expenseNumber,
-          type: expenseData.type
+          expenseNumber: expenseToDelete.expenseNumber || 'Sin número',
+          type: expenseToDelete.type
         }, {
-          amount: expenseData.type === 'product' ? expenseData.totalAmount : expenseData.amount,
-          category: expenseData.type === 'product' ? expenseData.productCategory : expenseData.category,
-          productName: expenseData.productName,
-          productId: expenseData.productId,
-          supplier: expenseData.supplier,
-          description: expenseData.description,
-          quantitySold: expenseData.quantitySold,
-          unitPrice: expenseData.unitPrice,
-          saleReason: expenseData.saleReason,
-          createdBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
-          notes: expenseData.notes,
-          stockAdjusted: expenseData.type === 'product' && expenseData.quantitySold > 0
-        });
-        
-      } else if (dialogType === 'edit-expense' && selectedExpense) {
-        // Actualizar gasto existente
-        expenseId = await updateExpense(selectedExpense.id, expenseData);
-        
-        // NUEVO: Registrar actividad de actualización con detección de cambios
-        const changes = detectExpenseChanges(selectedExpense, expenseData);
-        
-        await logExpense('update', {
-          id: selectedExpense.id,
-          expenseNumber: expenseData.expenseNumber,
-          type: expenseData.type
-        }, {
-          amount: expenseData.type === 'product' ? expenseData.totalAmount : expenseData.amount,
-          previousAmount: selectedExpense.type === 'product' ? selectedExpense.totalAmount : selectedExpense.amount,
-          category: expenseData.type === 'product' ? expenseData.productCategory : expenseData.category,
-          productName: expenseData.productName,
-          supplier: expenseData.supplier,
-          description: expenseData.description,
-          changes: changes,
-          changesCount: changes.length,
-          changesSummary: changes.length > 0 ? changes.join(', ') : 'Sin cambios significativos',
-          updatedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
+          amount: expenseToDelete.type === 'product' ? expenseToDelete.totalAmount : expenseToDelete.amount,
+          category: expenseToDelete.type === 'product' ? expenseToDelete.productCategory : expenseToDelete.category,
+          productName: expenseToDelete.productName,
+          supplier: expenseToDelete.supplier,
+          description: expenseToDelete.description,
+          deletedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
         });
       }
       
-      setDialogOpen(false);
-      await loadExpenses();
-      return true;
-    } catch (err) {
-      console.error('Error al guardar gasto:', err);
-      setError('Error al guardar gasto: ' + err.message);
-      throw err;
+      // Recargar datos
+      await loadData();
+    } catch (err: any) {
+      console.error('Error al eliminar gasto:', err);
+      setError('Error al eliminar gasto: ' + err.message);
     }
-  }, [dialogType, selectedExpense, addExpense, updateExpense, loadExpenses, currentUser, logExpense]);
+  }, [expenses, deleteExpense, logExpense, currentUser, loadData]);
 
-  // NUEVO: Función para detectar cambios en gastos
-  const detectExpenseChanges = useCallback((oldExpense, newExpense) => {
-    const changes = [];
+  // Detectar cambios entre gastos para logging
+  const detectExpenseChanges = useCallback((oldExpense: Expense, newExpense: ExpenseData): string[] => {
+    const changes: string[] = [];
     
-    // Cambios en tipo de gasto
-    if (oldExpense.type !== newExpense.type) {
-      const typeMap = {
-        'product': 'Venta de producto',
-        'misc': 'Gasto varios'
-      };
-      changes.push(`Tipo: ${typeMap[oldExpense.type]} → ${typeMap[newExpense.type]}`);
+    // Cambios en monto
+    const oldAmount = oldExpense.type === 'product' ? oldExpense.totalAmount : oldExpense.amount;
+    const newAmount = newExpense.type === 'product' ? newExpense.totalAmount : newExpense.amount;
+    if (oldAmount !== newAmount) {
+      changes.push(`Monto: $${oldAmount || 0} → $${newAmount || 0}`);
     }
     
-    // Cambios en descripción o producto
-    if (oldExpense.type === 'product' && newExpense.type === 'product') {
-      if (oldExpense.productName !== newExpense.productName) {
-        changes.push(`Producto: ${oldExpense.productName} → ${newExpense.productName}`);
-      }
-      if (oldExpense.quantitySold !== newExpense.quantitySold) {
-        changes.push(`Cantidad: ${oldExpense.quantitySold} → ${newExpense.quantitySold}`);
-      }
-      if (oldExpense.unitPrice !== newExpense.unitPrice) {
-        changes.push(`Precio unitario: $${oldExpense.unitPrice?.toLocaleString()} → $${newExpense.unitPrice?.toLocaleString()}`);
-      }
-      if (oldExpense.totalAmount !== newExpense.totalAmount) {
-        changes.push(`Total: $${oldExpense.totalAmount?.toLocaleString()} → $${newExpense.totalAmount?.toLocaleString()}`);
-      }
-    } else if (oldExpense.type === 'misc' && newExpense.type === 'misc') {
-      if (oldExpense.description !== newExpense.description) {
-        changes.push(`Descripción: ${oldExpense.description} → ${newExpense.description}`);
-      }
-      if (oldExpense.amount !== newExpense.amount) {
-        changes.push(`Importe: $${oldExpense.amount?.toLocaleString()} → $${newExpense.amount?.toLocaleString()}`);
-      }
-      if (oldExpense.supplier !== newExpense.supplier) {
-        changes.push(`Proveedor: ${oldExpense.supplier || 'Sin proveedor'} → ${newExpense.supplier || 'Sin proveedor'}`);
-      }
+    // Cambios en descripción
+    if (oldExpense.description !== newExpense.description) {
+      changes.push(`Descripción: ${oldExpense.description || 'Sin descripción'} → ${newExpense.description || 'Sin descripción'}`);
+    }
+    
+    // Cambios en proveedor (solo para gastos varios)
+    if (oldExpense.supplier !== newExpense.supplier) {
+      changes.push(`Proveedor: ${oldExpense.supplier || 'Sin proveedor'} → ${newExpense.supplier || 'Sin proveedor'}`);
+    }
+    
+    // Cambios en producto (solo para ventas)
+    if (oldExpense.productName !== newExpense.productName) {
+      changes.push(`Producto: ${oldExpense.productName || 'Sin producto'} → ${newExpense.productName || 'Sin producto'}`);
+    }
+    
+    // Cambios en cantidad vendida
+    if (oldExpense.quantitySold !== newExpense.quantitySold) {
+      changes.push(`Cantidad: ${oldExpense.quantitySold || 0} → ${newExpense.quantitySold || 0}`);
     }
     
     // Cambios en categoría
@@ -318,8 +299,77 @@ const useExpensesController = () => {
     return changes;
   }, []);
 
+  // Guardar gasto (crear o actualizar)
+  const handleSaveExpense = useCallback(async (expenseData: ExpenseData): Promise<void> => {
+    try {
+      setError('');
+      let expenseId: string;
+      
+      if (dialogType === 'add-expense') {
+        // Crear nuevo gasto
+        expenseId = await addExpense(expenseData);
+        
+        // Registrar actividad de creación
+        await logExpense('create', {
+          id: expenseId,
+          expenseNumber: expenseData.expenseNumber || 'Generado automáticamente',
+          type: expenseData.type
+        }, {
+          amount: expenseData.type === 'product' ? expenseData.totalAmount : expenseData.amount,
+          category: expenseData.type === 'product' ? expenseData.productCategory : expenseData.category,
+          productName: expenseData.productName,
+          productId: expenseData.productId,
+          supplier: expenseData.supplier,
+          description: expenseData.description,
+          quantitySold: expenseData.quantitySold,
+          unitPrice: expenseData.unitPrice,
+          saleReason: expenseData.saleReason,
+          createdBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
+          notes: expenseData.notes,
+          stockAdjusted: expenseData.type === 'product' && (expenseData.quantitySold || 0) > 0
+        });
+        
+      } else if (dialogType === 'edit-expense' && selectedExpense) {
+        // Actualizar gasto existente
+        expenseId = await updateExpense(selectedExpense.id, expenseData);
+        
+        // Registrar actividad de actualización con detección de cambios
+        const changes = detectExpenseChanges(selectedExpense, expenseData);
+        
+        await logExpense('update', {
+          id: selectedExpense.id,
+          expenseNumber: expenseData.expenseNumber || 'Sin número',
+          type: expenseData.type
+        }, {
+          amount: expenseData.type === 'product' ? expenseData.totalAmount : expenseData.amount,
+          previousAmount: selectedExpense.type === 'product' ? selectedExpense.totalAmount : selectedExpense.amount,
+          category: expenseData.type === 'product' ? expenseData.productCategory : expenseData.category,
+          productName: expenseData.productName,
+          supplier: expenseData.supplier,
+          description: expenseData.description,
+          changes: changes,
+          changesCount: changes.length,
+          changesSummary: changes.length > 0 ? 
+            `${changes.length} cambio${changes.length > 1 ? 's' : ''}: ${changes.join(', ')}` : 
+            'Sin cambios detectados',
+          updatedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
+          notes: expenseData.notes
+        });
+      }
+      
+      // Cerrar diálogo y recargar datos
+      setDialogOpen(false);
+      setSelectedExpense(null);
+      await loadData();
+      
+    } catch (err: any) {
+      console.error('Error al guardar gasto:', err);
+      setError('Error al guardar gasto: ' + err.message);
+    }
+  }, [dialogType, selectedExpense, addExpense, updateExpense, logExpense, currentUser, loadData, detectExpenseChanges]);
+
   // Cambiar filtros
-  const handleFilterChange = useCallback((filterName, value) => {
+  const handleFilterChange = useCallback((filterName: keyof FilterOptions, value: any) => {
     setFilters(prev => ({
       ...prev,
       [filterName]: value
@@ -327,7 +377,7 @@ const useExpensesController = () => {
   }, []);
 
   // Buscar por texto
-  const handleSearch = useCallback((searchTerm) => {
+  const handleSearch = useCallback((searchTerm: string) => {
     setFilters(prev => ({
       ...prev,
       searchTerm
@@ -341,18 +391,18 @@ const useExpensesController = () => {
   }, []);
 
   // Obtener categorías únicas para filtros
-  const getUniqueCategories = useCallback(() => {
-    const categories = new Set();
+  const getUniqueCategories = useCallback((): string[] => {
+    const categories = new Set<string>();
     
     // Categorías de productos
-    products.forEach(product => {
+    products.forEach((product: any) => {
       if (product.category) {
         categories.add(product.category);
       }
     });
     
     // Categorías de gastos varios
-    expenses.forEach(expense => {
+    expenses.forEach((expense: Expense) => {
       if (expense.type === 'misc' && expense.category) {
         categories.add(expense.category);
       }
@@ -362,12 +412,12 @@ const useExpensesController = () => {
   }, [products, expenses]);
 
   // Calcular estadísticas de gastos
-  const getStatistics = useCallback(() => {
+  const getStatistics = useCallback((): Statistics => {
     const totalExpenses = expenses.length;
-    const productExpenses = expenses.filter(e => e.type === 'product').length;
-    const miscExpenses = expenses.filter(e => e.type === 'misc').length;
+    const productExpenses = expenses.filter((e: Expense) => e.type === 'product').length;
+    const miscExpenses = expenses.filter((e: Expense) => e.type === 'misc').length;
     
-    const totalAmount = expenses.reduce((sum, expense) => {
+    const totalAmount = expenses.reduce((sum: number, expense: Expense) => {
       if (expense.type === 'product') {
         return sum + (expense.totalAmount || 0);
       } else {
@@ -376,14 +426,14 @@ const useExpensesController = () => {
     }, 0);
     
     const totalProductsSold = expenses
-      .filter(e => e.type === 'product')
-      .reduce((sum, expense) => sum + (expense.quantitySold || 0), 0);
+      .filter((e: Expense) => e.type === 'product')
+      .reduce((sum: number, expense: Expense) => sum + (expense.quantitySold || 0), 0);
     
     // Estadísticas del mes actual
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
-    const thisMonthExpenses = expenses.filter(expense => {
+    const thisMonthExpenses = expenses.filter((expense: Expense) => {
       const expenseDate = expense.date
         ? new Date(expense.date.seconds ? expense.date.seconds * 1000 : expense.date)
         : null;
@@ -392,7 +442,7 @@ const useExpensesController = () => {
              expenseDate.getFullYear() === currentYear;
     });
     
-    const thisMonthAmount = thisMonthExpenses.reduce((sum, expense) => {
+    const thisMonthAmount = thisMonthExpenses.reduce((sum: number, expense: Expense) => {
       if (expense.type === 'product') {
         return sum + (expense.totalAmount || 0);
       } else {
@@ -417,11 +467,11 @@ const useExpensesController = () => {
       { value: 'all', label: 'Todos los tipos' },
       { value: 'product', label: 'Ventas de productos' },
       { value: 'misc', label: 'Gastos varios' }
-    ],
+    ] as FilterSelectOption[],
     categories: [
       { value: 'all', label: 'Todas las categorías' },
       ...getUniqueCategories().map(cat => ({ value: cat, label: cat }))
-    ],
+    ] as FilterSelectOption[],
     dateRange: {
       start: null,
       end: null

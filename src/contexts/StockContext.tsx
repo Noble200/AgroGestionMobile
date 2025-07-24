@@ -1,5 +1,5 @@
-// src/contexts/StockContext.js - Contexto corregido para productos
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+// src/contexts/StockContext.tsx - Contexto corregido para productos
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
   collection, 
   getDocs, 
@@ -16,25 +16,160 @@ import {
 import { db } from '../api/firebase';
 import { useAuth } from './AuthContext';
 
-// Crear el contexto de stock
-const StockContext = createContext();
-
-export function useStock() {
-  return useContext(StockContext);
+// Interfaces para TypeScript
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  stock: number;
+  minStock: number;
+  price: number;
+  cost?: number;
+  supplier?: string;
+  code?: string;
+  barcode?: string;
+  lotNumber?: string;
+  expiryDate?: any; // Timestamp de Firebase
+  description?: string;
+  notes?: string;
+  status: string;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
 }
 
-export function StockProvider({ children }) {
+interface Warehouse {
+  id: string;
+  name: string;
+  type: string;
+  location: string;
+  fieldId: string;
+  lotId: string;
+  isFieldLevel: boolean;
+  status: string;
+  capacity: number;
+  capacityUnit: string;
+  storageCondition: string;
+  temperature?: number | null;
+  humidity?: number | null;
+  supervisor: string;
+  description: string;
+  notes: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+interface Field {
+  id: string;
+  name: string;
+  size: number;
+  sizeUnit: string;
+  location: string;
+  soilType: string;
+  cropType: string;
+  status: string;
+  lastActivity?: string;
+  supervisor: string;
+  description: string;
+  notes: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+interface Transfer {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  fromLocationId: string;
+  fromLocationName: string;
+  fromLocationType: string;
+  toLocationId: string;
+  toLocationName: string;
+  toLocationType: string;
+  status: string;
+  reason: string;
+  notes: string;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
+}
+
+interface Fumigation {
+  id: string;
+  fieldId: string;
+  fieldName: string;
+  pestName: string;
+  quantity: number;
+  unit: string;
+  method: string;
+  date?: any;
+  status: string;
+  notes: string;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
+}
+
+interface Filters {
+  category?: string;
+  status?: string;
+  lowStock?: boolean;
+  searchTerm?: string;
+  type?: string;
+  fieldId?: string;
+}
+
+interface StockContextType {
+  products: Product[];
+  warehouses: Warehouse[];
+  transfers: Transfer[];
+  fumigations: Fumigation[];
+  fields: Field[];
+  loading: boolean;
+  error: string;
+  loadProducts: (filters?: Filters) => Promise<Product[]>;
+  loadWarehouses: (filters?: Filters) => Promise<Warehouse[]>;
+  loadFields: (filters?: Filters) => Promise<Field[]>;
+  loadTransfers: (filters?: Filters) => Promise<Transfer[]>;
+  loadFumigations: (filters?: Filters) => Promise<Fumigation[]>;
+  createProduct: (productData: Partial<Product>) => Promise<string>;
+  updateProduct: (productId: string, productData: Partial<Product>) => Promise<string>;
+  deleteProduct: (productId: string) => Promise<boolean>;
+  createWarehouse: (warehouseData: Partial<Warehouse>) => Promise<string>;
+  updateWarehouse: (warehouseId: string, warehouseData: Partial<Warehouse>) => Promise<string>;
+  deleteWarehouse: (warehouseId: string) => Promise<boolean>;
+}
+
+interface StockProviderProps {
+  children: ReactNode;
+}
+
+// Crear el contexto de stock
+const StockContext = createContext<StockContextType | undefined>(undefined);
+
+export function useStock(): StockContextType {
+  const context = useContext(StockContext);
+  if (context === undefined) {
+    throw new Error('useStock must be used within a StockProvider');
+  }
+  return context;
+}
+
+export function StockProvider({ children }: StockProviderProps) {
   const { currentUser } = useAuth();
-  const [products, setProducts] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [transfers, setTransfers] = useState([]);
-  const [fumigations, setFumigations] = useState([]);
-  const [fields, setFields] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [fumigations, setFumigations] = useState<Fumigation[]>([]);
+  const [fields, setFields] = useState<Field[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
 
   // Cargar productos - CORREGIDO
-  const loadProducts = useCallback(async (filters = {}) => {
+  const loadProducts = useCallback(async (filters: Filters = {}): Promise<Product[]> => {
     try {
       setLoading(true);
       setError('');
@@ -46,48 +181,44 @@ export function StockProvider({ children }) {
       const querySnapshot = await getDocs(productsQuery);
       
       // Mapear documentos a objetos de productos
-      let productsData = [];
+      let productsData: Product[] = [];
       querySnapshot.forEach((doc) => {
         const productData = doc.data();
-        
-        console.log('Producto cargado:', doc.id, productData); // Debug
-        
         productsData.push({
           id: doc.id,
-          name: productData.name,
-          code: productData.code,
-          category: productData.category,
-          storageType: productData.storageType,
-          unit: productData.unit,
-          stock: productData.stock || 0, // CORREGIDO: usar 'stock' en lugar de 'quantity'
+          name: productData.name || '',
+          category: productData.category || '',
+          unit: productData.unit || 'kg',
+          stock: productData.stock || 0,
           minStock: productData.minStock || 0,
-          lotNumber: productData.lotNumber,
-          storageConditions: productData.storageConditions,
-          dimensions: productData.dimensions,
-          expiryDate: productData.expiryDate,
-          supplierCode: productData.supplierCode,
-          cost: productData.cost,
-          supplierName: productData.supplierName,
-          supplierContact: productData.supplierContact,
-          tags: productData.tags || [],
-          notes: productData.notes,
-          fieldId: productData.fieldId,
-          warehouseId: productData.warehouseId,
-          lotId: productData.lotId,
-          storageLevel: productData.storageLevel,
+          price: productData.price || 0,
+          cost: productData.cost || 0,
+          supplier: productData.supplier || '',
+          code: productData.code || '',
+          barcode: productData.barcode || '',
+          lotNumber: productData.lotNumber || '',
+          expiryDate: productData.expiryDate || null,
+          description: productData.description || '',
+          notes: productData.notes || '',
+          status: productData.status || 'active',
           createdAt: productData.createdAt,
-          updatedAt: productData.updatedAt
+          updatedAt: productData.updatedAt,
+          createdBy: productData.createdBy || ''
         });
       });
       
-      console.log('Total productos cargados:', productsData.length); // Debug
+      console.log(`Productos cargados: ${productsData.length}`); // Debug
       
       // Aplicar filtros si se proporcionan
       if (filters.category) {
         productsData = productsData.filter(product => product.category === filters.category);
       }
       
-      if (filters.minStock) {
+      if (filters.status) {
+        productsData = productsData.filter(product => product.status === filters.status);
+      }
+      
+      if (filters.lowStock) {
         productsData = productsData.filter(product => product.stock <= product.minStock);
       }
       
@@ -102,7 +233,7 @@ export function StockProvider({ children }) {
       
       setProducts(productsData);
       return productsData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar productos:', error);
       setError('Error al cargar productos: ' + error.message);
       throw error;
@@ -112,7 +243,7 @@ export function StockProvider({ children }) {
   }, []);
 
   // Cargar almacenes
-  const loadWarehouses = useCallback(async (filters = {}) => {
+  const loadWarehouses = useCallback(async (filters: Filters = {}): Promise<Warehouse[]> => {
     try {
       setLoading(true);
       setError('');
@@ -122,7 +253,7 @@ export function StockProvider({ children }) {
       const querySnapshot = await getDocs(warehousesQuery);
       
       // Mapear documentos a objetos de almacenes
-      let warehousesData = [];
+      let warehousesData: Warehouse[] = [];
       querySnapshot.forEach((doc) => {
         const warehouseData = doc.data();
         warehousesData.push({
@@ -164,14 +295,13 @@ export function StockProvider({ children }) {
         const term = filters.searchTerm.toLowerCase();
         warehousesData = warehousesData.filter(warehouse => 
           warehouse.name.toLowerCase().includes(term) || 
-          (warehouse.description && warehouse.description.toLowerCase().includes(term)) ||
-          (warehouse.location && warehouse.location.toLowerCase().includes(term))
+          warehouse.location.toLowerCase().includes(term)
         );
       }
       
       setWarehouses(warehousesData);
       return warehousesData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar almacenes:', error);
       setError('Error al cargar almacenes: ' + error.message);
       throw error;
@@ -181,34 +311,54 @@ export function StockProvider({ children }) {
   }, []);
 
   // Cargar campos
-  const loadFields = useCallback(async () => {
+  const loadFields = useCallback(async (filters: Filters = {}): Promise<Field[]> => {
     try {
       setLoading(true);
       setError('');
       
+      // Crear consulta base
       const fieldsQuery = query(collection(db, 'fields'), orderBy('name'));
       const querySnapshot = await getDocs(fieldsQuery);
       
-      const fieldsData = [];
+      // Mapear documentos a objetos de campos
+      let fieldsData: Field[] = [];
       querySnapshot.forEach((doc) => {
         const fieldData = doc.data();
         fieldsData.push({
           id: doc.id,
-          name: fieldData.name,
-          location: fieldData.location,
-          area: fieldData.area,
-          areaUnit: fieldData.areaUnit,
-          owner: fieldData.owner,
-          notes: fieldData.notes,
-          lots: fieldData.lots || [],
+          name: fieldData.name || '',
+          size: fieldData.size || 0,
+          sizeUnit: fieldData.sizeUnit || 'hectares',
+          location: fieldData.location || '',
+          soilType: fieldData.soilType || '',
+          cropType: fieldData.cropType || '',
+          status: fieldData.status || 'active',
+          lastActivity: fieldData.lastActivity || '',
+          supervisor: fieldData.supervisor || '',
+          description: fieldData.description || '',
+          notes: fieldData.notes || '',
           createdAt: fieldData.createdAt,
           updatedAt: fieldData.updatedAt
         });
       });
       
+      // Aplicar filtros si se proporcionan
+      if (filters.status) {
+        fieldsData = fieldsData.filter(field => field.status === filters.status);
+      }
+      
+      if (filters.searchTerm) {
+        const term = filters.searchTerm.toLowerCase();
+        fieldsData = fieldsData.filter(field => 
+          field.name.toLowerCase().includes(term) || 
+          field.location.toLowerCase().includes(term) ||
+          field.cropType.toLowerCase().includes(term)
+        );
+      }
+      
       setFields(fieldsData);
       return fieldsData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar campos:', error);
       setError('Error al cargar campos: ' + error.message);
       throw error;
@@ -217,164 +367,243 @@ export function StockProvider({ children }) {
     }
   }, []);
 
-  // Añadir un producto - CORREGIDO
-  const addProduct = useCallback(async (productData) => {
+  // Cargar transferencias
+  const loadTransfers = useCallback(async (filters: Filters = {}): Promise<Transfer[]> => {
     try {
+      setLoading(true);
       setError('');
       
-      console.log('addProduct - Datos recibidos:', productData); // Debug
+      // Crear consulta base
+      const transfersQuery = query(collection(db, 'transfers'), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(transfersQuery);
       
-      // Preparar datos para Firestore
-      const dbProductData = {
-        name: productData.name,
-        code: productData.code,
-        category: productData.category,
-        storageType: productData.storageType,
-        unit: productData.unit,
-        stock: Number(productData.stock) || 0, // CORREGIDO: usar 'stock' y asegurar conversión
-        minStock: Number(productData.minStock) || 0,
-        lotNumber: productData.lotNumber || null,
-        storageConditions: productData.storageConditions || null,
-        dimensions: productData.dimensions || null,
-        supplierCode: productData.supplierCode || null,
-        cost: productData.cost ? Number(productData.cost) : null,
-        supplierName: productData.supplierName || null,
-        supplierContact: productData.supplierContact || null,
-        tags: productData.tags || [],
-        notes: productData.notes || null,
-        fieldId: productData.fieldId || null,
-        warehouseId: productData.warehouseId || null,
-        lotId: productData.lotId || null,
-        storageLevel: productData.storageLevel || 'field',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
+      // Mapear documentos a objetos de transferencias
+      let transfersData: Transfer[] = [];
+      querySnapshot.forEach((doc) => {
+        const transferData = doc.data();
+        transfersData.push({
+          id: doc.id,
+          productId: transferData.productId || '',
+          productName: transferData.productName || '',
+          quantity: transferData.quantity || 0,
+          unit: transferData.unit || 'kg',
+          fromLocationId: transferData.fromLocationId || '',
+          fromLocationName: transferData.fromLocationName || '',
+          fromLocationType: transferData.fromLocationType || '',
+          toLocationId: transferData.toLocationId || '',
+          toLocationName: transferData.toLocationName || '',
+          toLocationType: transferData.toLocationType || '',
+          status: transferData.status || 'pending',
+          reason: transferData.reason || '',
+          notes: transferData.notes || '',
+          createdAt: transferData.createdAt,
+          updatedAt: transferData.updatedAt,
+          createdBy: transferData.createdBy || ''
+        });
+      });
       
-      // Convertir fecha de vencimiento si existe
-      if (productData.expiryDate) {
-        if (productData.expiryDate instanceof Date) {
-          dbProductData.expiryDate = Timestamp.fromDate(productData.expiryDate);
-        }
+      // Aplicar filtros si se proporcionan
+      if (filters.status) {
+        transfersData = transfersData.filter(transfer => transfer.status === filters.status);
       }
       
-      console.log('addProduct - Datos a guardar:', dbProductData); // Debug
+      if (filters.searchTerm) {
+        const term = filters.searchTerm.toLowerCase();
+        transfersData = transfersData.filter(transfer => 
+          transfer.productName.toLowerCase().includes(term) || 
+          transfer.fromLocationName.toLowerCase().includes(term) ||
+          transfer.toLocationName.toLowerCase().includes(term)
+        );
+      }
       
-      // Insertar producto en Firestore
-      const productRef = await addDoc(collection(db, 'products'), dbProductData);
+      setTransfers(transfersData);
+      return transfersData;
+    } catch (error: any) {
+      console.error('Error al cargar transferencias:', error);
+      setError('Error al cargar transferencias: ' + error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Cargar fumigaciones
+  const loadFumigations = useCallback(async (filters: Filters = {}): Promise<Fumigation[]> => {
+    try {
+      setLoading(true);
+      setError('');
       
-      // Recargar productos
+      // Crear consulta base
+      const fumigationsQuery = query(collection(db, 'fumigations'), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(fumigationsQuery);
+      
+      // Mapear documentos a objetos de fumigaciones
+      let fumigationsData: Fumigation[] = [];
+      querySnapshot.forEach((doc) => {
+        const fumigationData = doc.data();
+        fumigationsData.push({
+          id: doc.id,
+          fieldId: fumigationData.fieldId || '',
+          fieldName: fumigationData.fieldName || '',
+          pestName: fumigationData.pestName || '',
+          quantity: fumigationData.quantity || 0,
+          unit: fumigationData.unit || 'L',
+          method: fumigationData.method || '',
+          date: fumigationData.date,
+          status: fumigationData.status || 'planned',
+          notes: fumigationData.notes || '',
+          createdAt: fumigationData.createdAt,
+          updatedAt: fumigationData.updatedAt,
+          createdBy: fumigationData.createdBy || ''
+        });
+      });
+      
+      // Aplicar filtros si se proporcionan
+      if (filters.status) {
+        fumigationsData = fumigationsData.filter(fumigation => fumigation.status === filters.status);
+      }
+      
+      if (filters.fieldId) {
+        fumigationsData = fumigationsData.filter(fumigation => fumigation.fieldId === filters.fieldId);
+      }
+      
+      if (filters.searchTerm) {
+        const term = filters.searchTerm.toLowerCase();
+        fumigationsData = fumigationsData.filter(fumigation => 
+          fumigation.fieldName.toLowerCase().includes(term) || 
+          fumigation.pestName.toLowerCase().includes(term)
+        );
+      }
+      
+      setFumigations(fumigationsData);
+      return fumigationsData;
+    } catch (error: any) {
+      console.error('Error al cargar fumigaciones:', error);
+      setError('Error al cargar fumigaciones: ' + error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Crear producto
+  const createProduct = useCallback(async (productData: Partial<Product>): Promise<string> => {
+    try {
+      setError('');
+      const newProductRef = await addDoc(collection(db, 'products'), {
+        ...productData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: currentUser?.uid
+      });
       await loadProducts();
-      
-      return productRef.id;
-    } catch (error) {
-      console.error('Error al añadir producto:', error);
-      setError('Error al añadir producto: ' + error.message);
+      return newProductRef.id;
+    } catch (error: any) {
+      setError('Error al crear producto: ' + error.message);
       throw error;
     }
-  }, [loadProducts]);
+  }, [currentUser?.uid, loadProducts]);
 
-  // Actualizar un producto - CORREGIDO
-  const updateProduct = useCallback(async (productId, productData) => {
+  // Actualizar producto
+  const updateProduct = useCallback(async (productId: string, productData: Partial<Product>): Promise<string> => {
     try {
       setError('');
-      
-      // Preparar datos para actualizar
-      const updateData = {
-        name: productData.name,
-        code: productData.code,
-        category: productData.category,
-        storageType: productData.storageType,
-        unit: productData.unit,
-        stock: Number(productData.stock) || 0, // CORREGIDO: usar 'stock' y asegurar conversión
-        minStock: Number(productData.minStock) || 0,
-        lotNumber: productData.lotNumber,
-        storageConditions: productData.storageConditions,
-        dimensions: productData.dimensions,
-        supplierCode: productData.supplierCode,
-        cost: productData.cost ? Number(productData.cost) : null,
-        supplierName: productData.supplierName,
-        supplierContact: productData.supplierContact,
-        tags: productData.tags || [],
-        notes: productData.notes,
-        fieldId: productData.fieldId,
-        warehouseId: productData.warehouseId,
-        lotId: productData.lotId,
-        storageLevel: productData.storageLevel,
+      await updateDoc(doc(db, 'products', productId), {
+        ...productData,
         updatedAt: serverTimestamp()
-      };
-      
-      // Convertir fecha de vencimiento si existe
-      if (productData.expiryDate) {
-        if (productData.expiryDate instanceof Date) {
-          updateData.expiryDate = Timestamp.fromDate(productData.expiryDate);
-        }
-      }
-      
-      // Actualizar producto en Firestore
-      await updateDoc(doc(db, 'products', productId), updateData);
-      
-      // Recargar productos
+      });
       await loadProducts();
-      
       return productId;
-    } catch (error) {
-      console.error(`Error al actualizar producto ${productId}:`, error);
+    } catch (error: any) {
       setError('Error al actualizar producto: ' + error.message);
       throw error;
     }
   }, [loadProducts]);
 
-  // Eliminar un producto
-  const deleteProduct = useCallback(async (productId) => {
+  // Eliminar producto
+  const deleteProduct = useCallback(async (productId: string): Promise<boolean> => {
     try {
       setError('');
-      
-      // Eliminar producto de Firestore
       await deleteDoc(doc(db, 'products', productId));
-      
-      // Recargar productos
       await loadProducts();
-      
       return true;
-    } catch (error) {
-      console.error(`Error al eliminar producto ${productId}:`, error);
+    } catch (error: any) {
       setError('Error al eliminar producto: ' + error.message);
       throw error;
     }
   }, [loadProducts]);
 
-  // Efecto para cargar datos iniciales
-  useEffect(() => {
-    if (!currentUser) {
-      setProducts([]);
-      setWarehouses([]);
-      setTransfers([]);
-      setFumigations([]);
-      setFields([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    // Cargar datos iniciales
-    Promise.all([
-      loadProducts(),
-      loadWarehouses(),
-      loadFields()
-    ])
-      .then(() => {
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Error al cargar datos iniciales:', err);
-        setError('Error al cargar datos: ' + err.message);
-        setLoading(false);
+  // Crear almacén
+  const createWarehouse = useCallback(async (warehouseData: Partial<Warehouse>): Promise<string> => {
+    try {
+      setError('');
+      const newWarehouseRef = await addDoc(collection(db, 'warehouses'), {
+        ...warehouseData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
+      await loadWarehouses();
+      return newWarehouseRef.id;
+    } catch (error: any) {
+      setError('Error al crear almacén: ' + error.message);
+      throw error;
+    }
+  }, [loadWarehouses]);
+
+  // Actualizar almacén
+  const updateWarehouse = useCallback(async (warehouseId: string, warehouseData: Partial<Warehouse>): Promise<string> => {
+    try {
+      setError('');
+      await updateDoc(doc(db, 'warehouses', warehouseId), {
+        ...warehouseData,
+        updatedAt: serverTimestamp()
+      });
+      await loadWarehouses();
+      return warehouseId;
+    } catch (error: any) {
+      setError('Error al actualizar almacén: ' + error.message);
+      throw error;
+    }
+  }, [loadWarehouses]);
+
+  // Eliminar almacén
+  const deleteWarehouse = useCallback(async (warehouseId: string): Promise<boolean> => {
+    try {
+      setError('');
+      await deleteDoc(doc(db, 'warehouses', warehouseId));
+      await loadWarehouses();
+      return true;
+    } catch (error: any) {
+      setError('Error al eliminar almacén: ' + error.message);
+      throw error;
+    }
+  }, [loadWarehouses]);
+
+  // Cargar datos iniciales cuando el componente se monta
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        setLoading(true);
+        await Promise.all([
+          loadProducts(),
+          loadWarehouses(),
+          loadFields()
+        ]);
+      } catch (error: any) {
+        console.error('Error al cargar datos iniciales:', error);
+        setError('Error al cargar datos: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (currentUser) {
+      loadInitialData();
+    }
   }, [currentUser, loadProducts, loadWarehouses, loadFields]);
 
   // Valor que se proporcionará a través del contexto
-  const value = {
+  const value: StockContextType = {
     products,
     warehouses,
     transfers,
@@ -382,57 +611,17 @@ export function StockProvider({ children }) {
     fields,
     loading,
     error,
-    setError,
     loadProducts,
-    addProduct,
-    updateProduct,
-    deleteProduct,
     loadWarehouses,
     loadFields,
-    
-    // Funciones para almacenes
-    addWarehouse: async (warehouseData) => {
-      try {
-        setError('');
-        const newWarehouseRef = await addDoc(collection(db, 'warehouses'), {
-          ...warehouseData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        await loadWarehouses();
-        return newWarehouseRef.id;
-      } catch (error) {
-        setError('Error al crear almacén: ' + error.message);
-        throw error;
-      }
-    },
-    
-    updateWarehouse: async (warehouseId, warehouseData) => {
-      try {
-        setError('');
-        await updateDoc(doc(db, 'warehouses', warehouseId), {
-          ...warehouseData,
-          updatedAt: serverTimestamp()
-        });
-        await loadWarehouses();
-        return warehouseId;
-      } catch (error) {
-        setError('Error al actualizar almacén: ' + error.message);
-        throw error;
-      }
-    },
-    
-    deleteWarehouse: async (warehouseId) => {
-      try {
-        setError('');
-        await deleteDoc(doc(db, 'warehouses', warehouseId));
-        await loadWarehouses();
-        return true;
-      } catch (error) {
-        setError('Error al eliminar almacén: ' + error.message);
-        throw error;
-      }
-    }
+    loadTransfers,
+    loadFumigations,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    createWarehouse,
+    updateWarehouse,
+    deleteWarehouse
   };
 
   return (

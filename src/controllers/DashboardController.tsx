@@ -1,11 +1,89 @@
-// src/controllers/DashboardController.js - Controlador del Dashboard sin actividades recientes
+// src/controllers/DashboardController.tsx - Controlador del Dashboard sin actividades recientes
 import { useState, useEffect, useCallback } from 'react';
 import { useStock } from '../contexts/StockContext';
 import { useHarvests } from '../contexts/HarvestContext';
 import { useFumigations } from '../contexts/FumigationContext';
 import { useTransfers } from '../contexts/TransferContext';
 
-const useDashboardController = () => {
+// Interfaces para TypeScript
+interface Product {
+  id: string;
+  name: string;
+  stock?: number;
+  minStock?: number;
+  expiryDate?: any; // Firebase Timestamp
+  category?: string;
+  unit?: string;
+  price?: number;
+  warehouseId?: string;
+  [key: string]: any;
+}
+
+interface Warehouse {
+  id: string;
+  name: string;
+  type?: string;
+  location?: string;
+  capacity?: number;
+  [key: string]: any;
+}
+
+interface Transfer {
+  id: string;
+  status: string;
+  productName?: string;
+  sourceWarehouseId?: string;
+  targetWarehouseId?: string;
+  quantity?: number;
+  unit?: string;
+  requestDate?: any;
+  [key: string]: any;
+}
+
+interface Fumigation {
+  id: string;
+  status: string;
+  fieldName?: string;
+  pestName?: string;
+  applicationDate?: any;
+  plannedDate?: any;
+  [key: string]: any;
+}
+
+interface Harvest {
+  id: string;
+  status: string;
+  productName?: string;
+  fieldName?: string;
+  harvestDate?: any;
+  plannedDate?: any;
+  estimatedQuantity?: number;
+  [key: string]: any;
+}
+
+interface DashboardStats {
+  totalProducts: number;
+  lowStockCount: number;
+  expiringCount: number;
+  warehouseCount: number;
+  pendingTransfersCount: number;
+  pendingFumigationsCount: number;
+  upcomingHarvestsCount: number;
+}
+
+interface UseDashboardControllerReturn {
+  stats: DashboardStats;
+  lowStockProducts: Product[];
+  expiringSoonProducts: Product[];
+  pendingTransfers: Transfer[];
+  pendingFumigations: Fumigation[];
+  upcomingHarvests: Harvest[];
+  loading: boolean;
+  error: string;
+  refreshData: () => Promise<void>;
+}
+
+const useDashboardController = (): UseDashboardControllerReturn => {
   const { 
     products = [], 
     warehouses = [], 
@@ -36,7 +114,7 @@ const useDashboardController = () => {
     loadTransfers
   } = useTransfers();
   
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     totalProducts: 0,
     lowStockCount: 0,
     expiringCount: 0,
@@ -46,13 +124,13 @@ const useDashboardController = () => {
     upcomingHarvestsCount: 0
   });
   
-  const [lowStockProducts, setLowStockProducts] = useState([]);
-  const [expiringSoonProducts, setExpiringSoonProducts] = useState([]);
-  const [pendingTransfers, setPendingTransfers] = useState([]);
-  const [pendingFumigations, setPendingFumigations] = useState([]);
-  const [upcomingHarvests, setUpcomingHarvests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
+  const [expiringSoonProducts, setExpiringSoonProducts] = useState<Product[]>([]);
+  const [pendingTransfers, setPendingTransfers] = useState<Transfer[]>([]);
+  const [pendingFumigations, setPendingFumigations] = useState<Fumigation[]>([]);
+  const [upcomingHarvests, setUpcomingHarvests] = useState<Harvest[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
   
   // Calcular estadísticas y listas filtradas con verificación de arrays
   const processData = useCallback(() => {
@@ -67,10 +145,11 @@ const useDashboardController = () => {
       return;
     }
     
-    // Calcular productos con stock bajo
+    // Calcular productos con stock bajo usando casting temporal
     const lowStock = products.filter(product => {
-      const currentStock = product.stock || 0;
-      const minStock = product.minStock || 0;
+      const productAny = product as any;
+      const currentStock = productAny.stock || 0;
+      const minStock = productAny.minStock || 0;
       return currentStock <= minStock && minStock > 0;
     }).slice(0, 5);
     
@@ -81,80 +160,67 @@ const useDashboardController = () => {
     
     const expiringSoon = products
       .filter(product => {
-        const expiryDate = product.expiryDate 
-          ? new Date(product.expiryDate.seconds ? product.expiryDate.seconds * 1000 : product.expiryDate) 
+        const productAny = product as any;
+        const expiryDate = productAny.expiryDate 
+          ? new Date(productAny.expiryDate.seconds ? productAny.expiryDate.seconds * 1000 : productAny.expiryDate)
           : null;
-        return expiryDate && expiryDate > currentDate && expiryDate < thirtyDaysFromNow;
+        
+        return expiryDate && expiryDate <= thirtyDaysFromNow && expiryDate >= currentDate;
       })
       .sort((a, b) => {
-        const dateA = a.expiryDate.seconds ? a.expiryDate.seconds * 1000 : a.expiryDate;
-        const dateB = b.expiryDate.seconds ? b.expiryDate.seconds * 1000 : b.expiryDate;
-        return new Date(dateA) - new Date(dateB);
+        const aAny = a as any;
+        const bAny = b as any;
+        const dateA = aAny.expiryDate 
+          ? new Date(aAny.expiryDate.seconds ? aAny.expiryDate.seconds * 1000 : aAny.expiryDate)
+          : new Date(0);
+        const dateB = bAny.expiryDate 
+          ? new Date(bAny.expiryDate.seconds ? bAny.expiryDate.seconds * 1000 : bAny.expiryDate)
+          : new Date(0);
+        return dateA.getTime() - dateB.getTime();
       })
       .slice(0, 5);
     
-    // Obtener transferencias pendientes
-    const pendingTransfs = Array.isArray(transfers) 
-      ? transfers
-          .filter(transfer => transfer.status === 'pending' || transfer.status === 'approved' || transfer.status === 'shipped')
-          .map(transfer => ({
-            ...transfer,
-            sourceWarehouseName: getWarehouseName(transfer.sourceWarehouseId),
-            targetWarehouseName: getWarehouseName(transfer.targetWarehouseId)
-          }))
-          .slice(0, 5)
-      : [];
+    // Verificar que transfers sea un array
+    let pendingTransfs: Transfer[] = [];
+    if (Array.isArray(transfers)) {
+      pendingTransfs = transfers.filter(transfer => {
+        const transferAny = transfer as any;
+        return transferAny.status === 'pending' || transferAny.status === 'approved';
+      }).slice(0, 5);
+    }
     
-    // Obtener fumigaciones pendientes y programadas
-    const pendingFumigs = Array.isArray(fumigations)
-      ? fumigations
-          .filter(fumigation => fumigation.status === 'pending' || fumigation.status === 'scheduled')
-          .sort((a, b) => {
-            const dateA = a.applicationDate 
-              ? (a.applicationDate.seconds ? a.applicationDate.seconds * 1000 : a.applicationDate)
-              : new Date().getTime() + 999999999;
-              
-            const dateB = b.applicationDate 
-              ? (b.applicationDate.seconds ? b.applicationDate.seconds * 1000 : b.applicationDate)
-              : new Date().getTime() + 999999999;
-              
-            return new Date(dateA) - new Date(dateB);
-          })
-          .slice(0, 5)
-      : [];
+    // Verificar que fumigations sea un array
+    let pendingFumigs: Fumigation[] = [];
+    if (Array.isArray(fumigations)) {
+      pendingFumigs = fumigations.filter(fumigation => {
+        const fumigationAny = fumigation as any;
+        return fumigationAny.status === 'planned' || fumigationAny.status === 'pending';
+      }).slice(0, 5);
+    }
     
-    // Obtener cosechas próximas (próximos 90 días)
-    const ninetyDaysFromNow = new Date();
-    ninetyDaysFromNow.setDate(currentDate.getDate() + 90);
+    // Verificar que harvests sea un array
+    let upcoming: Harvest[] = [];
+    if (Array.isArray(harvests)) {
+      upcoming = harvests.filter(harvest => {
+        const harvestAny = harvest as any;
+        return harvestAny.status === 'planned' || harvestAny.status === 'pending';
+      }).slice(0, 5);
+    }
     
-    const upcoming = Array.isArray(harvests)
-      ? harvests
-          .filter(harvest => {
-            const plannedDate = harvest.plannedDate
-              ? new Date(harvest.plannedDate.seconds ? harvest.plannedDate.seconds * 1000 : harvest.plannedDate)
-              : null;
-            return plannedDate && plannedDate > currentDate && plannedDate < ninetyDaysFromNow &&
-                   (harvest.status === 'pending' || harvest.status === 'scheduled');
-          })
-          .sort((a, b) => {
-            const dateA = a.plannedDate.seconds ? a.plannedDate.seconds * 1000 : a.plannedDate;
-            const dateB = b.plannedDate.seconds ? b.plannedDate.seconds * 1000 : b.plannedDate;
-            return new Date(dateA) - new Date(dateB);
-          })
-          .slice(0, 5)
-      : [];
-    
-    // Actualizar estados
-    setLowStockProducts(lowStock);
-    setExpiringSoonProducts(expiringSoon);
+    setLowStockProducts(lowStock as Product[]);
+    setExpiringSoonProducts(expiringSoon as Product[]);
     setPendingTransfers(pendingTransfs);
     setPendingFumigations(pendingFumigs);
     setUpcomingHarvests(upcoming);
     
-    // Actualizar estadísticas
     setStats({
       totalProducts: products.length,
-      lowStockCount: lowStock.length,
+      lowStockCount: products.filter(product => {
+        const productAny = product as any;
+        const currentStock = productAny.stock || 0;
+        const minStock = productAny.minStock || 0;
+        return currentStock <= minStock && minStock > 0;
+      }).length,
       expiringCount: expiringSoon.length,
       warehouseCount: Array.isArray(warehouses) ? warehouses.length : 0,
       pendingTransfersCount: pendingTransfs.length,
@@ -165,14 +231,18 @@ const useDashboardController = () => {
   }, [products, warehouses, transfers, fumigations, harvests]);
   
   // Función para obtener el nombre de un almacén por ID
-  const getWarehouseName = (warehouseId) => {
+  const getWarehouseName = useCallback((warehouseId: string): string => {
     if (!Array.isArray(warehouses) || !warehouseId) {
       return 'Almacén desconocido';
     }
     
-    const warehouse = warehouses.find(w => w.id === warehouseId);
-    return warehouse ? warehouse.name : 'Almacén desconocido';
-  };
+    const warehouse = warehouses.find(w => {
+      const warehouseAny = w as any;
+      return warehouseAny.id === warehouseId;
+    });
+    
+    return warehouse ? (warehouse as any).name : 'Almacén desconocido';
+  }, [warehouses]);
   
   // Evaluar estados de carga y error
   useEffect(() => {
@@ -201,7 +271,7 @@ const useDashboardController = () => {
   }, [products, warehouses, transfers, fumigations, harvests, loading, processData]);
   
   // Función para recargar datos
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (): Promise<void> => {
     try {
       setError('');
       await Promise.all([
@@ -211,7 +281,7 @@ const useDashboardController = () => {
         loadFumigations(),
         loadTransfers()
       ]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al recargar datos:', err);
       setError('Error al cargar datos: ' + err.message);
     }

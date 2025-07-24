@@ -1,5 +1,5 @@
-// src/contexts/TransferContext.js - Contexto para gestión de transferencias
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+// src/contexts/TransferContext.tsx - Contexto para gestión de transferencias
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
   collection, 
   getDocs, 
@@ -17,21 +17,107 @@ import {
 import { db } from '../api/firebase';
 import { useAuth } from './AuthContext';
 
-// Crear el contexto de transferencias
-const TransferContext = createContext();
-
-export function useTransfers() {
-  return useContext(TransferContext);
+// Interfaces para TypeScript
+interface Warehouse {
+  id: string;
+  name: string;
+  type: string;
+  location: string;
+  capacity?: number;
+  capacityUnit?: string;
 }
 
-export function TransferProvider({ children }) {
+interface TransferProduct {
+  id?: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  quantityReceived?: number;
+  unit: string;
+  unitPrice?: number;
+  totalValue?: number;
+  notes?: string;
+}
+
+interface DateRange {
+  start: string | null;
+  end: string | null;
+}
+
+interface TransferFilters {
+  status?: string;
+  sourceWarehouse?: string;
+  targetWarehouse?: string;
+  dateRange?: DateRange;
+  searchTerm?: string;
+}
+
+interface Transfer {
+  id: string;
+  transferNumber: string;
+  sourceWarehouseId: string;
+  targetWarehouseId: string;
+  sourceWarehouse: Warehouse;
+  targetWarehouse: Warehouse;
+  products: TransferProduct[];
+  distance: number;
+  distanceUnit: string;
+  transferCost: number;
+  costPerUnit: number;
+  status: string;
+  requestedBy: string;
+  requestDate: any; // Firebase Timestamp
+  approvedBy: string;
+  approvedDate: any | null;
+  shippedBy: string;
+  shippedDate: any | null;
+  receivedBy: string;
+  receivedDate: any | null;
+  notes: string;
+  rejectionReason: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+interface TransferContextType {
+  transfers: Transfer[];
+  loading: boolean;
+  error: string;
+  setError: (error: string) => void;
+  loadTransfers: (filters?: TransferFilters) => Promise<Transfer[]>;
+  addTransfer: (transferData: Partial<Transfer>) => Promise<string>;
+  updateTransfer: (transferId: string, transferData: Partial<Transfer>) => Promise<string>;
+  deleteTransfer: (transferId: string) => Promise<boolean>;
+  approveTransfer: (transferId: string, approvedBy: string) => Promise<string>;
+  rejectTransfer: (transferId: string, rejectionReason: string, rejectedBy: string) => Promise<string>;
+  shipTransfer: (transferId: string, shippedBy: string) => Promise<string>;
+  receiveTransfer: (transferId: string, receivedBy: string, receivedProducts?: TransferProduct[]) => Promise<string>;
+  generateTransferNumber: () => string;
+}
+
+interface TransferProviderProps {
+  children: ReactNode;
+}
+
+// Crear el contexto de transferencias
+const TransferContext = createContext<TransferContextType | undefined>(undefined);
+
+export function useTransfers(): TransferContextType {
+  const context = useContext(TransferContext);
+  if (context === undefined) {
+    throw new Error('useTransfers must be used within a TransferProvider');
+  }
+  return context;
+}
+
+export function TransferProvider({ children }: TransferProviderProps) {
   const { currentUser } = useAuth();
-  const [transfers, setTransfers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
 
   // Cargar transferencias
-  const loadTransfers = useCallback(async (filters = {}) => {
+  const loadTransfers = useCallback(async (filters: TransferFilters = {}): Promise<Transfer[]> => {
     try {
       setLoading(true);
       setError('');
@@ -43,7 +129,7 @@ export function TransferProvider({ children }) {
       const querySnapshot = await getDocs(transfersQuery);
       
       // Mapear documentos a objetos de transferencias
-      let transfersData = [];
+      let transfersData: Transfer[] = [];
       querySnapshot.forEach((doc) => {
         const transferData = doc.data();
         transfersData.push({
@@ -51,8 +137,8 @@ export function TransferProvider({ children }) {
           transferNumber: transferData.transferNumber || '',
           sourceWarehouseId: transferData.sourceWarehouseId || '',
           targetWarehouseId: transferData.targetWarehouseId || '',
-          sourceWarehouse: transferData.sourceWarehouse || {},
-          targetWarehouse: transferData.targetWarehouse || {},
+          sourceWarehouse: transferData.sourceWarehouse || {} as Warehouse,
+          targetWarehouse: transferData.targetWarehouse || {} as Warehouse,
           products: transferData.products || [],
           distance: transferData.distance || 0,
           distanceUnit: transferData.distanceUnit || 'km',
@@ -98,24 +184,29 @@ export function TransferProvider({ children }) {
           
           if (!requestDate) return false;
           
-          return (!start || requestDate >= new Date(start)) && 
-                 (!end || requestDate <= new Date(end));
+          const startDate = start ? new Date(start) : null;
+          const endDate = end ? new Date(end) : null;
+          
+          if (startDate && requestDate < startDate) return false;
+          if (endDate && requestDate > endDate) return false;
+          
+          return true;
         });
       }
       
       if (filters.searchTerm) {
         const term = filters.searchTerm.toLowerCase();
         transfersData = transfersData.filter(transfer => 
-          (transfer.transferNumber && transfer.transferNumber.toLowerCase().includes(term)) ||
-          (transfer.requestedBy && transfer.requestedBy.toLowerCase().includes(term)) ||
-          (transfer.sourceWarehouse.name && transfer.sourceWarehouse.name.toLowerCase().includes(term)) ||
-          (transfer.targetWarehouse.name && transfer.targetWarehouse.name.toLowerCase().includes(term))
+          transfer.transferNumber.toLowerCase().includes(term) ||
+          transfer.sourceWarehouse.name?.toLowerCase().includes(term) ||
+          transfer.targetWarehouse.name?.toLowerCase().includes(term) ||
+          transfer.requestedBy.toLowerCase().includes(term)
         );
       }
       
       setTransfers(transfersData);
       return transfersData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar transferencias:', error);
       setError('Error al cargar transferencias: ' + error.message);
       throw error;
@@ -124,249 +215,133 @@ export function TransferProvider({ children }) {
     }
   }, []);
 
-  // Generar número de transferencia automático
-  const generateTransferNumber = useCallback(async () => {
-    try {
-      const currentYear = new Date().getFullYear();
-      const transfersQuery = query(
-        collection(db, 'transfers'),
-        where('transferNumber', '>=', `TRF-${currentYear}-`),
-        where('transferNumber', '<', `TRF-${currentYear + 1}-`),
-        orderBy('transferNumber', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(transfersQuery);
-      
-      let nextNumber = 1;
-      if (!querySnapshot.empty) {
-        const lastTransfer = querySnapshot.docs[0].data().transferNumber;
-        const lastNumber = parseInt(lastTransfer.split('-')[2]) || 0;
-        nextNumber = lastNumber + 1;
-      }
-      
-      return `TRF-${currentYear}-${nextNumber.toString().padStart(4, '0')}`;
-    } catch (error) {
-      console.error('Error al generar número de transferencia:', error);
-      return `TRF-${new Date().getFullYear()}-0001`;
-    }
+  // Generar número único de transferencia
+  const generateTransferNumber = useCallback((): string => {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return `TR-${timestamp}-${random}`;
   }, []);
 
-  // Añadir una transferencia con verificación de stock
-  const addTransfer = useCallback(async (transferData) => {
+  // Agregar nueva transferencia
+  const addTransfer = useCallback(async (transferData: Partial<Transfer>): Promise<string> => {
     try {
       setError('');
       
-      console.log('Añadiendo transferencia con datos:', transferData); // Debug
+      // Calcular costo por unidad si no está definido
+      const totalQuantity = transferData.products?.reduce((sum, product) => sum + product.quantity, 0) || 1;
+      const costPerUnit = (transferData.transferCost || 0) / totalQuantity;
       
-      // Generar número de transferencia si no se proporciona
-      if (!transferData.transferNumber) {
-        transferData.transferNumber = await generateTransferNumber();
-      }
-      
-      // Calcular costo por unidad de distancia
-      const costPerUnit = transferData.distance > 0 && transferData.transferCost > 0 
-        ? transferData.transferCost / transferData.distance 
-        : 0;
-      
-      // Usar transacción para asegurar consistencia
-      const transferId = await runTransaction(db, async (transaction) => {
-        // Verificar stock de productos seleccionados
-        if (transferData.products && transferData.products.length > 0) {
-          console.log('Verificando stock de productos...'); // Debug
-          
-          for (const transferProduct of transferData.products) {
-            const productRef = doc(db, 'products', transferProduct.productId);
-            const productDoc = await transaction.get(productRef);
-            
-            if (!productDoc.exists()) {
-              throw new Error(`El producto con ID ${transferProduct.productId} no existe`);
-            }
-            
-            const productData = productDoc.data();
-            const currentStock = productData.stock || 0;
-            const quantityToTransfer = transferProduct.quantity || 0;
-            
-            console.log(`Producto: ${productData.name}, Stock actual: ${currentStock}, Cantidad a transferir: ${quantityToTransfer}`); // Debug
-            
-            // Verificar que hay suficiente stock
-            if (currentStock < quantityToTransfer) {
-              throw new Error(`No hay suficiente stock del producto ${productData.name}. Stock disponible: ${currentStock}, requerido: ${quantityToTransfer}`);
-            }
-            
-            // Solo descontar del stock si la transferencia es automáticamente aprobada y enviada
-            if (transferData.status === 'shipped' || transferData.status === 'completed') {
-              const newStock = currentStock - quantityToTransfer;
-              console.log(`Actualizando stock de ${productData.name} de ${currentStock} a ${newStock}`); // Debug
-              
-              transaction.update(productRef, {
-                stock: newStock,
-                updatedAt: serverTimestamp()
-              });
-            }
-          }
-        }
-        
-        // Preparar datos para Firestore
-        const dbTransferData = {
-          transferNumber: transferData.transferNumber,
-          sourceWarehouseId: transferData.sourceWarehouseId || '',
-          targetWarehouseId: transferData.targetWarehouseId || '',
-          sourceWarehouse: transferData.sourceWarehouse || {},
-          targetWarehouse: transferData.targetWarehouse || {},
-          products: transferData.products || [],
-          distance: transferData.distance || 0,
-          distanceUnit: transferData.distanceUnit || 'km',
-          transferCost: transferData.transferCost || 0,
-          costPerUnit: costPerUnit,
-          status: transferData.status || 'pending',
-          requestedBy: transferData.requestedBy || '',
-          notes: transferData.notes || '',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-        
-        // Convertir fechas si existen
-        if (transferData.requestDate) {
-          if (transferData.requestDate instanceof Date) {
-            dbTransferData.requestDate = Timestamp.fromDate(transferData.requestDate);
-          }
-        } else {
-          dbTransferData.requestDate = serverTimestamp();
-        }
-        
-        // Insertar transferencia en Firestore
-        const transferRef = doc(collection(db, 'transfers'));
-        transaction.set(transferRef, dbTransferData);
-        
-        return transferRef.id;
-      });
-      
-      console.log('Transferencia creada con ID:', transferId); // Debug
-      
-      // Recargar transferencias
-      await loadTransfers();
-      
-      return transferId;
-    } catch (error) {
-      console.error('Error al añadir transferencia:', error);
-      setError('Error al añadir transferencia: ' + error.message);
-      throw error;
-    }
-  }, [loadTransfers, generateTransferNumber]);
-
-  // Actualizar una transferencia
-  const updateTransfer = useCallback(async (transferId, transferData) => {
-    try {
-      setError('');
-      
-      // Calcular costo por unidad de distancia
-      const costPerUnit = transferData.distance > 0 && transferData.transferCost > 0 
-        ? transferData.transferCost / transferData.distance 
-        : 0;
-      
-      // Preparar datos para actualizar
-      const updateData = {
+      const newTransferData = {
         ...transferData,
-        costPerUnit: costPerUnit,
+        transferNumber: transferData.transferNumber || generateTransferNumber(),
+        costPerUnit,
+        status: 'pending',
+        requestedBy: currentUser?.displayName || currentUser?.email || 'Usuario',
+        requestDate: serverTimestamp(),
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
       
-      // Convertir fechas si existen
-      ['requestDate', 'approvedDate', 'shippedDate', 'receivedDate'].forEach(dateField => {
-        if (transferData[dateField]) {
-          if (transferData[dateField] instanceof Date) {
-            updateData[dateField] = Timestamp.fromDate(transferData[dateField]);
-          }
-        }
+      const newTransferRef = await addDoc(collection(db, 'transfers'), newTransferData);
+      await loadTransfers();
+      return newTransferRef.id;
+    } catch (error: any) {
+      console.error('Error al crear transferencia:', error);
+      setError('Error al crear transferencia: ' + error.message);
+      throw error;
+    }
+  }, [currentUser, generateTransferNumber, loadTransfers]);
+
+  // Actualizar transferencia
+  const updateTransfer = useCallback(async (transferId: string, transferData: Partial<Transfer>): Promise<string> => {
+    try {
+      setError('');
+      
+      // Recalcular costo por unidad si se actualizan productos o costo
+      const updatedData = { ...transferData };
+      if (transferData.products || transferData.transferCost !== undefined) {
+        const totalQuantity = transferData.products?.reduce((sum, product) => sum + product.quantity, 0) || 1;
+        updatedData.costPerUnit = (transferData.transferCost || 0) / totalQuantity;
+      }
+      
+      await updateDoc(doc(db, 'transfers', transferId), {
+        ...updatedData,
+        updatedAt: serverTimestamp()
       });
       
-      // Actualizar transferencia en Firestore
-      await updateDoc(doc(db, 'transfers', transferId), updateData);
-      
-      // Recargar transferencias
       await loadTransfers();
-      
       return transferId;
-    } catch (error) {
-      console.error(`Error al actualizar transferencia ${transferId}:`, error);
+    } catch (error: any) {
+      console.error('Error al actualizar transferencia:', error);
       setError('Error al actualizar transferencia: ' + error.message);
       throw error;
     }
   }, [loadTransfers]);
 
-  // Eliminar una transferencia
-  const deleteTransfer = useCallback(async (transferId) => {
+  // Eliminar transferencia
+  const deleteTransfer = useCallback(async (transferId: string): Promise<boolean> => {
     try {
       setError('');
-      
-      // Eliminar transferencia de Firestore
       await deleteDoc(doc(db, 'transfers', transferId));
-      
-      // Recargar transferencias
       await loadTransfers();
-      
       return true;
-    } catch (error) {
-      console.error(`Error al eliminar transferencia ${transferId}:`, error);
+    } catch (error: any) {
+      console.error('Error al eliminar transferencia:', error);
       setError('Error al eliminar transferencia: ' + error.message);
       throw error;
     }
   }, [loadTransfers]);
 
-  // Aprobar una transferencia
-  const approveTransfer = useCallback(async (transferId, approvedBy) => {
+  // Aprobar transferencia
+  const approveTransfer = useCallback(async (transferId: string, approvedBy: string): Promise<string> => {
     try {
       setError('');
       
-      const updateData = {
+      await updateDoc(doc(db, 'transfers', transferId), {
         status: 'approved',
         approvedBy: approvedBy,
         approvedDate: serverTimestamp(),
         updatedAt: serverTimestamp()
-      };
+      });
       
-      await updateDoc(doc(db, 'transfers', transferId), updateData);
       await loadTransfers();
-      
       return transferId;
-    } catch (error) {
-      console.error(`Error al aprobar transferencia ${transferId}:`, error);
+    } catch (error: any) {
+      console.error('Error al aprobar transferencia:', error);
       setError('Error al aprobar transferencia: ' + error.message);
       throw error;
     }
   }, [loadTransfers]);
 
-  // Rechazar una transferencia
-  const rejectTransfer = useCallback(async (transferId, rejectionReason, rejectedBy) => {
+  // Rechazar transferencia
+  const rejectTransfer = useCallback(async (transferId: string, rejectionReason: string, rejectedBy: string): Promise<string> => {
     try {
       setError('');
       
-      const updateData = {
+      await updateDoc(doc(db, 'transfers', transferId), {
         status: 'rejected',
         rejectionReason: rejectionReason,
-        approvedBy: rejectedBy, // Quien la rechazó
-        approvedDate: serverTimestamp(),
+        rejectedBy: rejectedBy,
+        rejectedDate: serverTimestamp(),
         updatedAt: serverTimestamp()
-      };
+      });
       
-      await updateDoc(doc(db, 'transfers', transferId), updateData);
       await loadTransfers();
-      
       return transferId;
-    } catch (error) {
-      console.error(`Error al rechazar transferencia ${transferId}:`, error);
+    } catch (error: any) {
+      console.error('Error al rechazar transferencia:', error);
       setError('Error al rechazar transferencia: ' + error.message);
       throw error;
     }
   }, [loadTransfers]);
 
-  // Enviar una transferencia (descontar stock)
-  const shipTransfer = useCallback(async (transferId, shippedBy) => {
+  // Enviar transferencia (marcar como enviada)
+  const shipTransfer = useCallback(async (transferId: string, shippedBy: string): Promise<string> => {
     try {
       setError('');
       
+      // Realizar transacción para reducir stock del almacén origen
       await runTransaction(db, async (transaction) => {
-        // Obtener la transferencia actual
         const transferRef = doc(db, 'transfers', transferId);
         const transferDoc = await transaction.get(transferRef);
         
@@ -374,9 +349,9 @@ export function TransferProvider({ children }) {
           throw new Error('La transferencia no existe');
         }
         
-        const transferData = transferDoc.data();
+        const transferData = transferDoc.data() as Transfer;
         
-        // Descontar stock de productos
+        // Reducir stock de productos en el almacén origen
         if (transferData.products && transferData.products.length > 0) {
           for (const transferProduct of transferData.products) {
             const productRef = doc(db, 'products', transferProduct.productId);
@@ -385,18 +360,19 @@ export function TransferProvider({ children }) {
             if (productDoc.exists()) {
               const productData = productDoc.data();
               const currentStock = productData.stock || 0;
-              const quantityToTransfer = transferProduct.quantity || 0;
+              const quantityToShip = transferProduct.quantity || 0;
               
               // Verificar que hay suficiente stock
-              if (currentStock >= quantityToTransfer) {
-                const newStock = currentStock - quantityToTransfer;
-                transaction.update(productRef, {
-                  stock: newStock,
-                  updatedAt: serverTimestamp()
-                });
-              } else {
-                throw new Error(`No hay suficiente stock del producto ${productData.name}. Stock disponible: ${currentStock}, requerido: ${quantityToTransfer}`);
+              if (currentStock < quantityToShip) {
+                throw new Error(`Stock insuficiente para ${transferProduct.productName}. Disponible: ${currentStock}, Requerido: ${quantityToShip}`);
               }
+              
+              // Reducir stock
+              const newStock = currentStock - quantityToShip;
+              transaction.update(productRef, {
+                stock: newStock,
+                updatedAt: serverTimestamp()
+              });
             }
           }
         }
@@ -414,20 +390,24 @@ export function TransferProvider({ children }) {
       await loadTransfers();
       
       return transferId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al enviar transferencia ${transferId}:`, error);
       setError('Error al enviar transferencia: ' + error.message);
       throw error;
     }
   }, [loadTransfers]);
 
-  // Recibir una transferencia (añadir stock al destino)
-  const receiveTransfer = useCallback(async (transferId, receivedBy, receivedProducts = null) => {
+  // Recibir transferencia
+  const receiveTransfer = useCallback(async (
+    transferId: string, 
+    receivedBy: string, 
+    receivedProducts?: TransferProduct[]
+  ): Promise<string> => {
     try {
       setError('');
       
+      // Realizar transacción para añadir stock al almacén destino
       await runTransaction(db, async (transaction) => {
-        // Obtener la transferencia actual
         const transferRef = doc(db, 'transfers', transferId);
         const transferDoc = await transaction.get(transferRef);
         
@@ -435,8 +415,8 @@ export function TransferProvider({ children }) {
           throw new Error('La transferencia no existe');
         }
         
-        const transferData = transferDoc.data();
-        
+        const transferData = transferDoc.data() as Transfer;
+    
         // Usar productos recibidos o productos originales
         const productsToReceive = receivedProducts || transferData.products || [];
         
@@ -476,7 +456,7 @@ export function TransferProvider({ children }) {
       await loadTransfers();
       
       return transferId;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al recibir transferencia ${transferId}:`, error);
       setError('Error al recibir transferencia: ' + error.message);
       throw error;
@@ -492,14 +472,14 @@ export function TransferProvider({ children }) {
     }
 
     loadTransfers()
-      .catch(err => {
+      .catch((err: any) => {
         console.error('Error al cargar datos iniciales de transferencias:', err);
         setError('Error al cargar datos: ' + err.message);
       });
   }, [currentUser, loadTransfers]);
 
   // Valor que se proporcionará a través del contexto
-  const value = {
+  const value: TransferContextType = {
     transfers,
     loading,
     error,

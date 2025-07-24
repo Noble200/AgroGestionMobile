@@ -1,176 +1,49 @@
-// src/controllers/FieldsController.tsx - Controlador para campos con logging de actividades
+// src/controllers/FieldsController.js - Controlador para campos con logging de actividades
 import { useState, useEffect, useCallback } from 'react';
 import { useStock } from '../contexts/StockContext';
-import { useActivityLogger } from '../hooks/useActivityLogger';
+import { useActivityLogger } from '../hooks/useActivityLogger'; // NUEVO: Hook para logging
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../api/firebase';
 
-// Interfaces para TypeScript - Redefinidas para evitar conflictos
-interface ControllerLot {
-  id: string;
-  name: string;
-  area?: number;
-  areaUnit?: string;
-  status?: string;
-  soilType?: string;
-  irrigationType?: string;
-  notes?: string;
-  crops?: string[];
-  createdAt?: Date;
-  updatedAt?: Date;
-  [key: string]: any;
-}
-
-interface ControllerField {
-  id: string;
-  name: string;
-  location: string;
-  area: number;
-  areaUnit: string;
-  status: string;
-  soilType: string;
-  owner: string;
-  irrigationType?: string;
-  irrigationFrequency?: string;
-  notes?: string;
-  crops: string[];
-  currentCrop?: string;
-  lots: ControllerLot[];
-  createdAt?: any;
-  updatedAt?: any;
-  [key: string]: any;
-}
-
-interface Filters {
-  status: string;
-  soilType: string;
-  searchTerm: string;
-}
-
-interface FilterOption {
-  value: string;
-  label: string;
-}
-
-interface FilterOptions {
-  status: FilterOption[];
-  soilType: FilterOption[];
-}
-
-interface FieldChange {
-  field: string;
-  label: string;
-  oldValue: string;
-  newValue: string;
-  type?: string;
-}
-
-interface LotChange {
-  field: string;
-  label: string;
-  oldValue: string;
-  newValue: string;
-}
-
-interface UseFieldsControllerReturn {
-  fields: ControllerField[];
-  loading: boolean;
-  error: string;
-  selectedField: ControllerField | null;
-  selectedLot: ControllerLot | null;
-  dialogOpen: boolean;
-  dialogType: string;
-  filterOptions: FilterOptions;
-  handleAddField: () => void;
-  handleEditField: (field: ControllerField) => void;
-  handleViewField: (field: ControllerField) => void;
-  handleDeleteField: (fieldId: string) => Promise<void>;
-  handleAddLot: (field: ControllerField) => void;
-  handleEditLot: (field: ControllerField, lot: ControllerLot) => void;
-  handleDeleteLot: (fieldId: string, lotId: string) => Promise<void>;
-  handleSaveField: (fieldData: Partial<ControllerField>) => Promise<boolean>;
-  handleSaveLot: (lotData: Partial<ControllerLot>) => Promise<boolean>;
-  handleFilterChange: (filterName: string, value: string) => void;
-  handleSearch: (searchTerm: string) => void;
-  handleCloseDialog: () => void;
-  refreshData: () => Promise<void>;
-}
-
-const useFieldsController = (): UseFieldsControllerReturn => {
+const useFieldsController = () => {
   const { 
-    fields: stockFields, 
+    fields, 
     loading: stockLoading, 
     error: stockError, 
     loadFields
   } = useStock();
   
-  const { logField } = useActivityLogger();
-  
-  // Convertir campos del stock a nuestro tipo local
-  const fields: ControllerField[] = stockFields.map(field => {
-    const fieldAny = field as any; // Casting temporal para acceder a todas las propiedades
-    
-    const baseField: ControllerField = {
-      id: fieldAny.id || '',
-      name: fieldAny.name || '',
-      location: fieldAny.location || '',
-      area: fieldAny.area || 0,
-      areaUnit: fieldAny.areaUnit || 'ha',
-      status: fieldAny.status || 'active',
-      soilType: fieldAny.soilType || '',
-      owner: fieldAny.owner || '',
-      irrigationType: fieldAny.irrigationType,
-      irrigationFrequency: fieldAny.irrigationFrequency,
-      notes: fieldAny.notes,
-      crops: fieldAny.crops || [],
-      currentCrop: fieldAny.currentCrop,
-      lots: (fieldAny.lots || []).map((lot: any): ControllerLot => ({
-        id: lot.id || '',
-        name: lot.name || '',
-        area: lot.area,
-        areaUnit: lot.areaUnit,
-        status: lot.status,
-        soilType: lot.soilType,
-        irrigationType: lot.irrigationType,
-        notes: lot.notes,
-        crops: lot.crops || [],
-        createdAt: lot.createdAt,
-        updatedAt: lot.updatedAt
-      })),
-      createdAt: fieldAny.createdAt,
-      updatedAt: fieldAny.updatedAt
-    };
-    
-    return baseField;
-  });
+  const { logField } = useActivityLogger(); // NUEVO: Hook de logging
   
   // Estados locales
-  const [selectedField, setSelectedField] = useState<ControllerField | null>(null);
-  const [selectedLot, setSelectedLot] = useState<ControllerLot | null>(null);
-  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
-  const [dialogType, setDialogType] = useState<string>('');
-  const [filters, setFilters] = useState<Filters>({
+  const [selectedField, setSelectedField] = useState(null);
+  const [selectedLot, setSelectedLot] = useState(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogType, setDialogType] = useState(''); // 'add-field', 'edit-field', 'view-field', 'add-lot', 'edit-lot'
+  const [filters, setFilters] = useState({
     status: 'all',
     soilType: 'all',
     searchTerm: ''
   });
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>('');
-  const [filteredFieldsList, setFilteredFieldsList] = useState<ControllerField[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [filteredFieldsList, setFilteredFieldsList] = useState([]);
   
   // MODIFICADO: Función para añadir un campo con logging
-  const addField = useCallback(async (fieldData: Partial<ControllerField>): Promise<string> => {
+  const addField = useCallback(async (fieldData) => {
     try {
+      // Añadir documento a la colección 'fields'
       const fieldRef = await addDoc(collection(db, 'fields'), {
         ...fieldData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       
+      // NUEVO: Registrar actividad de creación
       await logField('create', {
         id: fieldRef.id,
-        name: fieldData.name || '',
-        location: fieldData.location || ''
+        name: fieldData.name,
+        location: fieldData.location
       }, {
         area: fieldData.area || 0,
         areaUnit: fieldData.areaUnit || 'ha',
@@ -184,9 +57,11 @@ const useFieldsController = (): UseFieldsControllerReturn => {
         notes: fieldData.notes
       });
       
+      // Recargar campos
       await loadFields();
+      
       return fieldRef.id;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error al añadir campo:', error);
       setError('Error al añadir campo: ' + error.message);
       throw error;
@@ -194,26 +69,29 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, [loadFields, logField]);
   
   // MODIFICADO: Función para actualizar un campo con logging detallado
-  const updateField = useCallback(async (fieldId: string, fieldData: Partial<ControllerField>): Promise<string> => {
+  const updateField = useCallback(async (fieldId, fieldData) => {
     try {
+      // Obtener datos actuales del campo para comparar
       const currentField = fields.find(f => f.id === fieldId);
       
       if (!currentField) {
         throw new Error('Campo no encontrado');
       }
       
+      // Actualizar el documento en la colección 'fields'
       await updateDoc(doc(db, 'fields', fieldId), {
         ...fieldData,
         updatedAt: serverTimestamp()
       });
       
+      // NUEVO: Detectar y registrar cambios específicos
       const changes = detectFieldChanges(currentField, fieldData);
       
       if (changes.length > 0) {
         await logField('update', {
           id: fieldId,
-          name: fieldData.name || currentField.name,
-          location: fieldData.location || currentField.location || ''
+          name: fieldData.name,
+          location: fieldData.location
         }, {
           changes: changes,
           changesCount: changes.length,
@@ -231,9 +109,11 @@ const useFieldsController = (): UseFieldsControllerReturn => {
         });
       }
       
+      // Recargar campos
       await loadFields();
+      
       return fieldId;
-    } catch (error: any) {
+    } catch (error) {
       console.error(`Error al actualizar campo ${fieldId}:`, error);
       setError('Error al actualizar campo: ' + error.message);
       throw error;
@@ -241,17 +121,20 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, [loadFields, logField, fields]);
   
   // MODIFICADO: Función para eliminar un campo con logging
-  const deleteField = useCallback(async (fieldId: string): Promise<boolean> => {
+  const deleteField = useCallback(async (fieldId) => {
     try {
+      // Obtener datos del campo antes de eliminarlo
       const fieldToDelete = fields.find(f => f.id === fieldId);
       
+      // Eliminar el documento de la colección 'fields'
       await deleteDoc(doc(db, 'fields', fieldId));
       
+      // NUEVO: Registrar actividad de eliminación
       if (fieldToDelete) {
         await logField('delete', {
           id: fieldId,
           name: fieldToDelete.name,
-          location: fieldToDelete.location || ''
+          location: fieldToDelete.location
         }, {
           finalArea: fieldToDelete.area || 0,
           areaUnit: fieldToDelete.areaUnit || 'ha',
@@ -261,13 +144,15 @@ const useFieldsController = (): UseFieldsControllerReturn => {
           crops: fieldToDelete.crops || [],
           status: fieldToDelete.status,
           hadLots: (fieldToDelete.lots?.length || 0) > 0,
-          lotsNames: fieldToDelete.lots?.map((lot: ControllerLot) => lot.name) || []
+          lotsNames: fieldToDelete.lots?.map(lot => lot.name) || []
         });
       }
       
+      // Recargar campos
       await loadFields();
+      
       return true;
-    } catch (error: any) {
+    } catch (error) {
       console.error(`Error al eliminar campo ${fieldId}:`, error);
       setError('Error al eliminar campo: ' + error.message);
       throw error;
@@ -275,10 +160,11 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, [loadFields, logField, fields]);
 
   // NUEVO: Función para detectar cambios entre campo actual y nuevos datos
-  const detectFieldChanges = (currentField: ControllerField, newData: Partial<ControllerField>): FieldChange[] => {
-    const changes: FieldChange[] = [];
+  const detectFieldChanges = (currentField, newData) => {
+    const changes = [];
     
-    const fieldsToMonitor: Record<string, string> = {
+    // Campos a monitorear con sus nombres legibles
+    const fieldsToMonitor = {
       name: 'Nombre',
       area: 'Superficie',
       areaUnit: 'Unidad de superficie', 
@@ -292,9 +178,10 @@ const useFieldsController = (): UseFieldsControllerReturn => {
     };
     
     for (const [field, label] of Object.entries(fieldsToMonitor)) {
-      const oldValue = (currentField as any)[field];
-      const newValue = (newData as any)[field];
+      const oldValue = currentField[field];
+      const newValue = newData[field];
       
+      // Comparar valores (considerar null y undefined como equivalentes)
       if (oldValue !== newValue && !(oldValue == null && newValue == null)) {
         changes.push({
           field,
@@ -306,6 +193,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
       }
     }
     
+    // Verificar cambios en cultivos (array)
     const oldCrops = currentField.crops || [];
     const newCrops = newData.crops || [];
     
@@ -319,6 +207,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
       });
     }
     
+    // Verificar cambios en número de lotes
     const oldLotsCount = currentField.lots?.length || 0;
     const newLotsCount = newData.lots?.length || 0;
     
@@ -336,14 +225,14 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   };
 
   // NUEVO: Función para formatear valores según el tipo de campo
-  const formatFieldValue = (value: any, field: string): string => {
+  const formatFieldValue = (value, field) => {
     if (value == null) return 'Sin definir';
     
     switch (field) {
       case 'area':
         return `${value} ha`;
       case 'status':
-        const statusMap: Record<string, string> = {
+        const statusMap = {
           'active': 'Activo',
           'inactive': 'Inactivo',
           'prepared': 'Preparado',
@@ -352,7 +241,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
         };
         return statusMap[value] || value;
       case 'soilType':
-        const soilTypeMap: Record<string, string> = {
+        const soilTypeMap = {
           'sandy': 'Arenoso',
           'clay': 'Arcilloso',
           'loam': 'Franco',
@@ -362,7 +251,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
         };
         return soilTypeMap[value] || value;
       case 'irrigationType':
-        const irrigationMap: Record<string, string> = {
+        const irrigationMap = {
           'sprinkler': 'Aspersión',
           'drip': 'Goteo',
           'flood': 'Inundación',
@@ -376,7 +265,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   };
 
   // NUEVO: Función para determinar el tipo de cambio
-  const getFieldChangeType = (field: string, oldValue: any, newValue: any): string => {
+  const getFieldChangeType = (field, oldValue, newValue) => {
     switch (field) {
       case 'area':
         const oldArea = Number(oldValue) || 0;
@@ -394,8 +283,8 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   };
 
   // NUEVO: Función para generar resumen de cambios
-  const generateFieldChangesSummary = (changes: FieldChange[]): string => {
-    const summaryParts: string[] = [];
+  const generateFieldChangesSummary = (changes) => {
+    const summaryParts = [];
     
     changes.forEach(change => {
       switch (change.type) {
@@ -423,15 +312,15 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   };
   
   // Función para cargar campos
-  const loadData = useCallback(async (): Promise<void> => {
+  const loadData = useCallback(async () => {
     try {
       setError('');
       await loadFields();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error al cargar campos:', err);
       setError('Error al cargar campos: ' + err.message);
     }
-  }, [loadFields]);
+  }, [loadFields, setError]);
   
   // Actualizar estado de carga y error
   useEffect(() => {
@@ -439,7 +328,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
     if (stockError) {
       setError(stockError);
     }
-  }, [stockLoading, stockError]);
+  }, [stockLoading, stockError, setError]);
   
   // Cargar campos al iniciar
   useEffect(() => {
@@ -447,18 +336,21 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, [loadData]);
   
   // Filtrar campos según filtros aplicados
-  const getFilteredFields = useCallback((): ControllerField[] => {
+  const getFilteredFields = useCallback(() => {
     if (!fields || fields.length === 0) return [];
     
     return fields.filter(field => {
+      // Filtro por estado
       if (filters.status !== 'all' && field.status !== filters.status) {
         return false;
       }
       
+      // Filtro por tipo de suelo
       if (filters.soilType !== 'all' && field.soilType !== filters.soilType) {
         return false;
       }
       
+      // Búsqueda por texto
       if (filters.searchTerm) {
         const term = filters.searchTerm.toLowerCase();
         return (
@@ -479,9 +371,11 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   
   // Convertir datos antiguos a formato nuevo al cargar campos
   useEffect(() => {
+    // Si hay campos con currentCrop pero sin crops, convertirlos
     if (fields && fields.length > 0) {
       fields.forEach(field => {
         if (field.currentCrop && (!field.crops || field.crops.length === 0)) {
+          // Este efecto no modifica el estado, solo adapta la visualización
           field.crops = [field.currentCrop];
         }
       });
@@ -489,28 +383,28 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, [fields]);
   
   // Abrir diálogo para añadir campo
-  const handleAddField = useCallback((): void => {
+  const handleAddField = useCallback(() => {
     setSelectedField(null);
     setDialogType('add-field');
     setDialogOpen(true);
   }, []);
   
   // Abrir diálogo para editar campo
-  const handleEditField = useCallback((field: ControllerField): void => {
+  const handleEditField = useCallback((field) => {
     setSelectedField(field);
     setDialogType('edit-field');
     setDialogOpen(true);
   }, []);
   
   // Abrir diálogo para ver detalles de un campo
-  const handleViewField = useCallback((field: ControllerField): void => {
+  const handleViewField = useCallback((field) => {
     setSelectedField(field);
     setDialogType('view-field');
     setDialogOpen(true);
   }, []);
   
   // Abrir diálogo para añadir lote a un campo
-  const handleAddLot = useCallback((field: ControllerField): void => {
+  const handleAddLot = useCallback((field) => {
     setSelectedField(field);
     setSelectedLot(null);
     setDialogType('add-lot');
@@ -518,7 +412,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, []);
   
   // Abrir diálogo para editar lote
-  const handleEditLot = useCallback((field: ControllerField, lot: ControllerLot): void => {
+  const handleEditLot = useCallback((field, lot) => {
     setSelectedField(field);
     setSelectedLot(lot);
     setDialogType('edit-lot');
@@ -526,22 +420,23 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, []);
   
   // MODIFICADO: Confirmar eliminación de campo con logging
-  const handleDeleteField = useCallback(async (fieldId: string): Promise<void> => {
+  const handleDeleteField = useCallback(async (fieldId) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este campo? Esta acción no se puede deshacer.')) {
       try {
         await deleteField(fieldId);
+        // Cerrar el diálogo si estaba abierto para este campo
         if (selectedField && selectedField.id === fieldId) {
           setDialogOpen(false);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error al eliminar campo:', err);
         setError('Error al eliminar campo: ' + err.message);
       }
     }
-  }, [deleteField, selectedField]);
+  }, [deleteField, selectedField, setError]);
   
   // MODIFICADO: Guardar nuevo campo con logging
-  const handleSaveField = useCallback(async (fieldData: Partial<ControllerField>): Promise<boolean> => {
+  const handleSaveField = useCallback(async (fieldData) => {
     try {
       if (dialogType === 'add-field') {
         await addField(fieldData);
@@ -551,28 +446,31 @@ const useFieldsController = (): UseFieldsControllerReturn => {
       
       setDialogOpen(false);
       await loadData();
-      return true;
-    } catch (err: any) {
+      return true; // Indicar éxito para desactivar animación de carga
+    } catch (err) {
       console.error('Error al guardar campo:', err);
       setError('Error al guardar campo: ' + err.message);
-      throw err;
+      throw err; // Propagar error para que el componente sepa que falló
     }
-  }, [dialogType, selectedField, addField, updateField, loadData]);
+  }, [dialogType, selectedField, addField, updateField, loadData, setError]);
   
-  // MODIFICADO: Guardar lote con logging
-  const handleSaveLot = useCallback(async (lotData: Partial<ControllerLot>): Promise<boolean> => {
+  // MODIFICADO: Guardar lote con logging (añadir o actualizar lote en un campo)
+  const handleSaveLot = useCallback(async (lotData) => {
     try {
-      if (!selectedField) return false;
+      if (!selectedField) return;
       
+      // Obtener lotes actuales del campo
       const currentLots = selectedField.lots || [];
-      let updatedLots: ControllerLot[] = [];
+      
+      let updatedLots = [];
       let lotAction = '';
-      let lotInfo: any = {};
+      let lotInfo = {};
       
       if (dialogType === 'add-lot') {
-        const newLot: ControllerLot = {
-          ...lotData as ControllerLot,
-          id: Date.now().toString(),
+        // Añadir nuevo lote con ID generado
+        const newLot = {
+          ...lotData,
+          id: Date.now().toString(), // ID simple basado en timestamp
           createdAt: new Date()
         };
         updatedLots = [...currentLots, newLot];
@@ -587,6 +485,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
           previousLotsCount: currentLots.length
         };
       } else if (dialogType === 'edit-lot' && selectedLot) {
+        // Actualizar lote existente
         updatedLots = currentLots.map(lot => 
           lot.id === selectedLot.id 
             ? { ...lot, ...lotData, updatedAt: new Date() } 
@@ -594,6 +493,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
         );
         lotAction = 'lot-update';
         
+        // Detectar cambios en el lote
         const lotChanges = detectLotChanges(selectedLot, lotData);
         
         lotInfo = {
@@ -606,32 +506,34 @@ const useFieldsController = (): UseFieldsControllerReturn => {
         };
       }
       
+      // Actualizar campo con los nuevos lotes
       await updateField(selectedField.id, {
         ...selectedField,
         lots: updatedLots
       });
       
+      // NUEVO: Registrar actividad específica de lote
       await logField(lotAction, {
         id: selectedField.id,
         name: selectedField.name,
-        location: selectedField.location || ''
+        location: selectedField.location
       }, lotInfo);
       
       setDialogOpen(false);
       await loadData();
-      return true;
-    } catch (err: any) {
+      return true; // Indicar éxito para desactivar animación de carga
+    } catch (err) {
       console.error('Error al guardar lote:', err);
       setError('Error al guardar lote: ' + err.message);
-      throw err;
+      throw err; // Propagar error para que el componente sepa que falló
     }
-  }, [dialogType, selectedField, selectedLot, updateField, loadData, logField]);
+  }, [dialogType, selectedField, selectedLot, updateField, loadData, setError, logField]);
 
   // NUEVO: Función para detectar cambios en lotes
-  const detectLotChanges = (currentLot: ControllerLot, newLotData: Partial<ControllerLot>): LotChange[] => {
-    const changes: LotChange[] = [];
+  const detectLotChanges = (currentLot, newLotData) => {
+    const changes = [];
     
-    const fieldsToMonitor: Record<string, string> = {
+    const fieldsToMonitor = {
       name: 'Nombre',
       area: 'Superficie',
       areaUnit: 'Unidad de superficie',
@@ -642,8 +544,8 @@ const useFieldsController = (): UseFieldsControllerReturn => {
     };
     
     for (const [field, label] of Object.entries(fieldsToMonitor)) {
-      const oldValue = (currentLot as any)[field];
-      const newValue = (newLotData as any)[field];
+      const oldValue = currentLot[field];
+      const newValue = newLotData[field];
       
       if (oldValue !== newValue && !(oldValue == null && newValue == null)) {
         changes.push({
@@ -655,6 +557,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
       }
     }
     
+    // Verificar cambios en cultivos del lote
     const oldCrops = currentLot.crops || [];
     const newCrops = newLotData.crops || [];
     
@@ -671,32 +574,37 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   };
 
   // NUEVO: Función para generar resumen de cambios en lotes
-  const generateLotChangesSummary = (changes: LotChange[]): string => {
+  const generateLotChangesSummary = (changes) => {
     return changes.map(change => 
       `${change.label}: ${change.oldValue} → ${change.newValue}`
     ).join(', ');
   };
   
   // MODIFICADO: Eliminar lote de un campo con logging
-  const handleDeleteLot = useCallback(async (fieldId: string, lotId: string): Promise<void> => {
+  const handleDeleteLot = useCallback(async (fieldId, lotId) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este lote? Esta acción no se puede deshacer.')) {
       try {
         const field = fields.find(f => f.id === fieldId);
-        if (!field || !field.lots) return;
+        if (!field) return;
         
+        // Obtener información del lote antes de eliminarlo
         const lotToDelete = field.lots.find(lot => lot.id === lotId);
+        
+        // Filtrar lotes para eliminar el deseado
         const updatedLots = field.lots.filter(lot => lot.id !== lotId);
         
+        // Actualizar campo sin el lote eliminado
         await updateField(fieldId, {
           ...field,
           lots: updatedLots
         });
         
+        // NUEVO: Registrar actividad de eliminación de lote
         if (lotToDelete) {
           await logField('lot-delete', {
             id: fieldId,
             name: field.name,
-            location: field.location || ''
+            location: field.location
           }, {
             deletedLotName: lotToDelete.name,
             deletedLotArea: lotToDelete.area || 0,
@@ -708,20 +616,21 @@ const useFieldsController = (): UseFieldsControllerReturn => {
           });
         }
         
+        // Si estamos viendo ese lote, cerrar el diálogo
         if (selectedLot && selectedLot.id === lotId) {
           setDialogOpen(false);
         }
         
         await loadData();
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error al eliminar lote:', err);
         setError('Error al eliminar lote: ' + err.message);
       }
     }
-  }, [fields, selectedLot, updateField, loadData, logField]);
+  }, [fields, selectedLot, updateField, loadData, setError, logField]);
   
   // Cambiar filtros
-  const handleFilterChange = useCallback((filterName: string, value: string): void => {
+  const handleFilterChange = useCallback((filterName, value) => {
     setFilters(prev => ({
       ...prev,
       [filterName]: value
@@ -729,7 +638,7 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, []);
   
   // Buscar por texto
-  const handleSearch = useCallback((searchTerm: string): void => {
+  const handleSearch = useCallback((searchTerm) => {
     setFilters(prev => ({
       ...prev,
       searchTerm
@@ -737,14 +646,14 @@ const useFieldsController = (): UseFieldsControllerReturn => {
   }, []);
   
   // Cerrar diálogo
-  const handleCloseDialog = useCallback((): void => {
+  const handleCloseDialog = useCallback(() => {
     setDialogOpen(false);
     setSelectedField(null);
     setSelectedLot(null);
   }, []);
   
   // Opciones para filtros
-  const filterOptions: FilterOptions = {
+  const filterOptions = {
     status: [
       { value: 'all', label: 'Todos los estados' },
       { value: 'active', label: 'Activo' },
