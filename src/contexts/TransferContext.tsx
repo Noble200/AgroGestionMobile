@@ -399,38 +399,38 @@ export function TransferProvider({ children }: TransferProviderProps) {
 
   // Recibir transferencia
   const receiveTransfer = useCallback(async (
-    transferId: string, 
-    receivedBy: string, 
-    receivedProducts?: TransferProduct[]
+    transferId: string,
+    receivedData: any
   ): Promise<string> => {
     try {
       setError('');
-      
+
       // Realizar transacción para añadir stock al almacén destino
       await runTransaction(db, async (transaction) => {
         const transferRef = doc(db, 'transfers', transferId);
         const transferDoc = await transaction.get(transferRef);
-        
+
         if (!transferDoc.exists()) {
           throw new Error('La transferencia no existe');
         }
-        
+
         const transferData = transferDoc.data() as Transfer;
-    
+
         // Usar productos recibidos o productos originales
-        const productsToReceive = receivedProducts || transferData.products || [];
-        
+        const productsToReceive = receivedData.products || transferData.products || [];
+        const receivedBy = receivedData.receivedBy;
+
         // Añadir stock a productos en el almacén destino
         if (productsToReceive.length > 0) {
           for (const transferProduct of productsToReceive) {
             const productRef = doc(db, 'products', transferProduct.productId);
             const productDoc = await transaction.get(productRef);
-            
+
             if (productDoc.exists()) {
               const productData = productDoc.data();
               const currentStock = productData.stock || 0;
               const quantityReceived = transferProduct.quantityReceived || transferProduct.quantity || 0;
-              
+
               // Añadir al stock
               const newStock = currentStock + quantityReceived;
               transaction.update(productRef, {
@@ -442,7 +442,7 @@ export function TransferProvider({ children }: TransferProviderProps) {
             }
           }
         }
-        
+
         // Actualizar la transferencia
         transaction.update(transferRef, {
           status: 'completed',
@@ -451,10 +451,10 @@ export function TransferProvider({ children }: TransferProviderProps) {
           updatedAt: serverTimestamp()
         });
       });
-      
+
       // Recargar transferencias
       await loadTransfers();
-      
+
       return transferId;
     } catch (error: any) {
       console.error(`Error al recibir transferencia ${transferId}:`, error);
@@ -462,7 +462,6 @@ export function TransferProvider({ children }: TransferProviderProps) {
       throw error;
     }
   }, [loadTransfers]);
-
   // Efecto para cargar datos iniciales
   useEffect(() => {
     if (!currentUser) {

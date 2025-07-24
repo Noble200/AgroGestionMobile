@@ -1,10 +1,90 @@
-// src/controllers/ReportsController.js - Controlador para gestión de reportes - CORREGIDO
+// src/controllers/ReportsController.tsx - Controlador para gestión de reportes
 import { useState, useEffect, useCallback } from 'react';
 import { useReports } from '../contexts/ReportsContext';
 import { useStock } from '../contexts/StockContext';
 import { downloadReportPDF } from '../utils/reportsPdfGenerator';
 
-const useReportsController = () => {
+// Interfaces para TypeScript
+interface ReportFilters {
+  startDate: string;
+  endDate: string;
+  status: string;
+  category: string;
+  field: string;
+  warehouse: string;
+  supplier: string;
+  type: string;
+  sourceWarehouse?: string;
+  targetWarehouse?: string;
+  crop?: string;
+}
+
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
+interface AvailableOptions {
+  categories: FilterOption[];
+  suppliers: FilterOption[];
+  crops: FilterOption[];
+  statuses: FilterOption[];
+  fields: FilterOption[];
+  warehouses: FilterOption[];
+}
+
+interface ReportType {
+  value: string;
+  label: string;
+  description: string;
+  icon: string;
+}
+
+interface PreviewColumn {
+  key: string;
+  label: string;
+  format?: string;
+}
+
+interface QueryFilters {
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  category?: string;
+  field?: string;
+  fieldId?: string;
+  sourceWarehouse?: string;
+  targetWarehouse?: string;
+  supplier?: string;
+  type?: string;
+  crop?: string;
+}
+
+interface UseReportsControllerReturn {
+  selectedReportType: string;
+  filters: ReportFilters;
+  reportData: any[];
+  reportTitle: string;
+  previewOpen: boolean;
+  loading: boolean;
+  error: string;
+  availableOptions: AvailableOptions;
+  reportTypes: ReportType[];
+  handleReportTypeChange: (reportType: string) => void;
+  handleFilterChange: (filterName: string, value: string) => void;
+  handleGeneratePreview: () => Promise<void>;
+  handleDownloadPDF: () => Promise<void>;
+  handleClosePreview: () => void;
+  handleClearFilters: () => void;
+  getApplicableFilters: () => string[];
+  getPreviewColumns: () => PreviewColumn[];
+  getNestedValue: (obj: any, path: string) => any;
+  formatValue: (value: any, format?: string) => string;
+  fields: any[];
+  warehouses: any[];
+}
+
+const useReportsController = (): UseReportsControllerReturn => {
   const {
     loading: reportsLoading,
     error: reportsError,
@@ -26,8 +106,8 @@ const useReportsController = () => {
   } = useStock();
 
   // Estados locales
-  const [selectedReportType, setSelectedReportType] = useState('products');
-  const [filters, setFilters] = useState({
+  const [selectedReportType, setSelectedReportType] = useState<string>('products');
+  const [filters, setFilters] = useState<ReportFilters>({
     startDate: '',
     endDate: '',
     status: 'all',
@@ -35,16 +115,19 @@ const useReportsController = () => {
     field: 'all',
     warehouse: 'all',
     supplier: 'all',
-    type: 'all'
+    type: 'all',
+    sourceWarehouse: 'all',
+    targetWarehouse: 'all',
+    crop: 'all'
   });
-  const [reportData, setReportData] = useState([]);
-  const [reportTitle, setReportTitle] = useState('');
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportTitle, setReportTitle] = useState<string>('');
+  const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
   
   // CORREGIDO: Inicializar availableOptions con valores por defecto
-  const [availableOptions, setAvailableOptions] = useState({
+  const [availableOptions, setAvailableOptions] = useState<AvailableOptions>({
     categories: [{ value: 'all', label: 'Todas las categorías' }],
     suppliers: [{ value: 'all', label: 'Todos los proveedores' }],
     crops: [{ value: 'all', label: 'Todos los cultivos' }],
@@ -54,7 +137,7 @@ const useReportsController = () => {
   });
 
   // Tipos de reportes disponibles
-  const reportTypes = [
+  const reportTypes: ReportType[] = [
     { 
       value: 'products', 
       label: 'Reporte de Productos',
@@ -113,7 +196,7 @@ const useReportsController = () => {
           loadFields(),
           loadWarehouses()
         ]);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error al cargar datos iniciales:', error);
       }
     };
@@ -129,55 +212,20 @@ const useReportsController = () => {
     }
   }, [selectedReportType]);
 
-  // Establecer fechas por defecto (último mes)
-  useEffect(() => {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 1);
-
-    setFilters(prev => ({
-      ...prev,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0]
-    }));
-  }, []);
-
-  // CORREGIDO: Obtener opciones disponibles para filtros según el tipo de reporte
-  const getFilterOptions = useCallback(() => {
-    const options = {
-      categories: [
-        { value: 'all', label: 'Todas las categorías' },
-        { value: 'insumo', label: 'Insumo' },
-        { value: 'herramienta', label: 'Herramienta' },
-        { value: 'semilla', label: 'Semilla' },
-        { value: 'fertilizante', label: 'Fertilizante' },
-        { value: 'pesticida', label: 'Pesticida' },
-        { value: 'maquinaria', label: 'Maquinaria' },
-        { value: 'combustible', label: 'Combustible' },
-        { value: 'otro', label: 'Otro' }
-      ],
-      statuses: [
-        { value: 'all', label: 'Todos los estados' }
-      ],
-      crops: [
-        { value: 'all', label: 'Todos los cultivos' },
-        { value: 'maiz', label: 'Maíz' },
-        { value: 'soja', label: 'Soja' },
-        { value: 'trigo', label: 'Trigo' },
-        { value: 'girasol', label: 'Girasol' },
-        { value: 'alfalfa', label: 'Alfalfa' },
-        { value: 'otro', label: 'Otro' }
-      ],
-      suppliers: [
-        { value: 'all', label: 'Todos los proveedores' }
-      ],
+  // Obtener opciones de filtros según el tipo de reporte y datos disponibles
+  const getFilterOptions = useCallback((): AvailableOptions => {
+    const options: AvailableOptions = {
+      categories: [{ value: 'all', label: 'Todas las categorías' }],
+      suppliers: [{ value: 'all', label: 'Todos los proveedores' }],
+      crops: [{ value: 'all', label: 'Todos los cultivos' }],
+      statuses: [{ value: 'all', label: 'Todos los estados' }],
       fields: [
         { value: 'all', label: 'Todos los campos' },
-        ...(Array.isArray(fields) ? fields.map(field => ({ value: field.id, label: field.name })) : [])
+        ...(Array.isArray(fields) ? fields.map((field: any) => ({ value: field.id, label: field.name })) : [])
       ],
       warehouses: [
         { value: 'all', label: 'Todos los almacenes' },
-        ...(Array.isArray(warehouses) ? warehouses.map(warehouse => ({ value: warehouse.id, label: warehouse.name })) : [])
+        ...(Array.isArray(warehouses) ? warehouses.map((warehouse: any) => ({ value: warehouse.id, label: warehouse.name })) : [])
       ]
     };
 
@@ -236,7 +284,7 @@ const useReportsController = () => {
   }, [getFilterOptions]);
 
   // Cambiar tipo de reporte
-  const handleReportTypeChange = useCallback((reportType) => {
+  const handleReportTypeChange = useCallback((reportType: string): void => {
     setSelectedReportType(reportType);
     setReportData([]);
     setPreviewOpen(false);
@@ -249,12 +297,15 @@ const useReportsController = () => {
       field: 'all',
       warehouse: 'all',
       supplier: 'all',
-      type: 'all'
+      type: 'all',
+      sourceWarehouse: 'all',
+      targetWarehouse: 'all',
+      crop: 'all'
     }));
   }, []);
 
   // Cambiar filtros
-  const handleFilterChange = useCallback((filterName, value) => {
+  const handleFilterChange = useCallback((filterName: string, value: string): void => {
     setFilters(prev => ({
       ...prev,
       [filterName]: value
@@ -262,45 +313,46 @@ const useReportsController = () => {
   }, []);
 
   // Obtener los filtros aplicables según el tipo de reporte
-  const getApplicableFilters = useCallback(() => {
+  const getApplicableFilters = useCallback((): string[] => {
     const baseFilters = ['startDate', 'endDate'];
     
     switch (selectedReportType) {
       case 'products':
-        return [...baseFilters, 'category', 'status', 'field'];
+        return [...baseFilters, 'status', 'category', 'field', 'warehouse'];
       case 'transfers':
         return [...baseFilters, 'status', 'sourceWarehouse', 'targetWarehouse'];
       case 'fumigations':
-        return [...baseFilters, 'status', 'crop', 'field'];
+        return [...baseFilters, 'status', 'field', 'crop'];
       case 'harvests':
-        return [...baseFilters, 'status', 'crop', 'field'];
+        return [...baseFilters, 'status', 'field', 'crop'];  
       case 'purchases':
         return [...baseFilters, 'status', 'supplier'];
       case 'expenses':
         return [...baseFilters, 'type', 'category'];
       case 'activities':
-        return [...baseFilters, 'status'];
+        return [...baseFilters, 'type'];
       case 'inventory':
-        return []; // No requiere filtros de fecha
+        return ['field', 'warehouse'];
       default:
         return baseFilters;
     }
   }, [selectedReportType]);
 
   // Generar vista previa del reporte
-  const handleGeneratePreview = useCallback(async () => {
+  const handleGeneratePreview = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       setError('');
       
-      console.log('Generando vista previa para:', selectedReportType, 'con filtros:', filters);
+      console.log('Generando vista previa para:', selectedReportType);
+      console.log('Filtros aplicados:', filters);
       
-      let data = [];
+      let data: any[] = [];
       
       // Preparar filtros para la consulta
-      const queryFilters = {
-        startDate: filters.startDate,
-        endDate: filters.endDate,
+      const queryFilters: QueryFilters = {
+        startDate: filters.startDate || undefined,
+        endDate: filters.endDate || undefined,
         status: filters.status !== 'all' ? filters.status : undefined,
         category: filters.category !== 'all' ? filters.category : undefined,
         field: filters.field !== 'all' ? filters.field : undefined,
@@ -336,7 +388,8 @@ const useReportsController = () => {
           data = await getActivitiesReport(queryFilters);
           break;
         case 'inventory':
-          data = await getInventoryReport();
+          const inventoryData = await getInventoryReport();
+          data = Array.isArray(inventoryData) ? inventoryData : [];
           break;
         default:
           throw new Error('Tipo de reporte no válido');
@@ -347,7 +400,7 @@ const useReportsController = () => {
       setReportData(data);
       setPreviewOpen(true);
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al generar vista previa:', err);
       setError('Error al generar vista previa: ' + err.message);
     } finally {
@@ -367,7 +420,7 @@ const useReportsController = () => {
   ]);
 
   // Generar y descargar PDF
-  const handleDownloadPDF = useCallback(async () => {
+  const handleDownloadPDF = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       setError('');
@@ -381,7 +434,7 @@ const useReportsController = () => {
       console.log('Generando PDF para:', selectedReportType);
       
       // Preparar filtros para el PDF
-      const pdfFilters = {
+      const pdfFilters: QueryFilters = {
         startDate: filters.startDate,
         endDate: filters.endDate,
         status: filters.status !== 'all' ? filters.status : undefined,
@@ -390,7 +443,7 @@ const useReportsController = () => {
       
       // Generar nombre del archivo
       const reportType = reportTypes.find(rt => rt.value === selectedReportType);
-      const fileName = `${reportType?.label || 'Reporte'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName: string = `${reportType?.label || 'Reporte'}_${new Date().toISOString().split('T')[0]}.pdf`;
       
       // Descargar PDF
       await downloadReportPDF(
@@ -398,26 +451,26 @@ const useReportsController = () => {
         reportData,
         pdfFilters,
         reportTitle,
-        fileName
+        null
       );
       
       console.log('PDF descargado exitosamente');
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al generar PDF:', err);
       setError('Error al generar PDF: ' + err.message);
     } finally {
       setLoading(false);
     }
-  }, [selectedReportType, reportData, filters, reportTitle, handleGeneratePreview]);
+  }, [selectedReportType, reportData, filters, reportTitle, handleGeneratePreview, reportTypes]);
 
   // Cerrar vista previa
-  const handleClosePreview = useCallback(() => {
+  const handleClosePreview = useCallback((): void => {
     setPreviewOpen(false);
   }, []);
 
   // Limpiar filtros
-  const handleClearFilters = useCallback(() => {
+  const handleClearFilters = useCallback((): void => {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - 1);
@@ -430,7 +483,10 @@ const useReportsController = () => {
       field: 'all',
       warehouse: 'all',
       supplier: 'all',
-      type: 'all'
+      type: 'all',
+      sourceWarehouse: 'all',
+      targetWarehouse: 'all',
+      crop: 'all'
     });
     
     setReportData([]);
@@ -438,7 +494,7 @@ const useReportsController = () => {
   }, []);
 
   // Funciones para formatear datos de preview
-  const getPreviewColumns = useCallback(() => {
+  const getPreviewColumns = useCallback((): PreviewColumn[] => {
     switch (selectedReportType) {
       case 'products':
         return [
@@ -470,9 +526,9 @@ const useReportsController = () => {
         return [
           { key: 'field.name', label: 'Campo' },
           { key: 'crop', label: 'Cultivo' },
-          { key: 'plannedDate', label: 'Fecha Plan.', format: 'date' },
-          { key: 'totalArea', label: 'Área (ha)' },
-          { key: 'estimatedYield', label: 'Rend. Est.' },
+          { key: 'plannedDate', label: 'Fecha Planificada', format: 'date' },
+          { key: 'actualDate', label: 'Fecha Real', format: 'date' },
+          { key: 'expectedYield', label: 'Rendimiento Esperado' },
           { key: 'status', label: 'Estado', format: 'status' }
         ];
       case 'purchases':
@@ -480,7 +536,7 @@ const useReportsController = () => {
           { key: 'purchaseNumber', label: 'Número' },
           { key: 'purchaseDate', label: 'Fecha', format: 'date' },
           { key: 'supplier', label: 'Proveedor' },
-          { key: 'totalAmount', label: 'Monto', format: 'currency' },
+          { key: 'totalAmount', label: 'Monto Total', format: 'currency' },
           { key: 'status', label: 'Estado', format: 'status' }
         ];
       case 'expenses':
@@ -493,10 +549,18 @@ const useReportsController = () => {
         ];
       case 'activities':
         return [
-          { key: 'date', label: 'Fecha', format: 'date' },
-          { key: 'type', label: 'Tipo', format: 'activityType' },
-          { key: 'title', label: 'Título' },
-          { key: 'description', label: 'Descripción' },
+          { key: 'createdAt', label: 'Fecha', format: 'datetime' },
+          { key: 'entity', label: 'Entidad', format: 'activityType' },
+          { key: 'type', label: 'Acción' },
+          { key: 'entityName', label: 'Elemento' },
+          { key: 'userName', label: 'Usuario' }
+        ];
+      case 'inventory':
+        return [
+          { key: 'name', label: 'Nombre' },
+          { key: 'type', label: 'Tipo' },
+          { key: 'location', label: 'Ubicación' },
+          { key: 'capacity', label: 'Capacidad' },
           { key: 'status', label: 'Estado', format: 'status' }
         ];
       default:
@@ -504,41 +568,51 @@ const useReportsController = () => {
     }
   }, [selectedReportType]);
 
-  // Función para obtener valor de una propiedad anidada
-  const getNestedValue = useCallback((obj, path) => {
-    return path.split('.').reduce((current, key) => current?.[key], obj);
+  // Obtener valor anidado de un objeto usando notación de punto
+  const getNestedValue = useCallback((obj: any, path: string): any => {
+    if (!obj || typeof obj !== 'object') return '';
+    
+    return path.split('.').reduce((current, key) => {
+      return current && typeof current === 'object' ? current[key] : '';
+    }, obj);
   }, []);
 
-  // Función para formatear valores según el tipo
-  const formatValue = useCallback((value, format) => {
-    if (value === null || value === undefined) return '-';
+  // Formatear valores según el tipo
+  const formatValue = useCallback((value: any, format?: string): string => {
+    if (value == null || value === undefined) return '';
     
     switch (format) {
+      case 'date':
+        if (value.seconds) {
+          return new Date(value.seconds * 1000).toLocaleDateString('es-ES');
+        }
+        return new Date(value).toLocaleDateString('es-ES');
+      case 'datetime':
+        if (value.seconds) {
+          return new Date(value.seconds * 1000).toLocaleString('es-ES');
+        }
+        return new Date(value).toLocaleString('es-ES');
       case 'currency':
         return new Intl.NumberFormat('es-AR', {
           style: 'currency',
           currency: 'ARS'
-        }).format(value);
-      case 'date':
-        return new Date(value).toLocaleDateString('es-ES');
+        }).format(Number(value) || 0);
       case 'status':
-        const statusMap = {
+        const statusMap: Record<string, string> = {
           'pending': 'Pendiente',
           'approved': 'Aprobado',
-          'rejected': 'Rechazado',
           'shipped': 'Enviado',
           'completed': 'Completado',
           'cancelled': 'Cancelado',
           'scheduled': 'Programado',
           'in_progress': 'En Proceso',
-          'active': 'Activo',
-          'inactive': 'Inactivo'
+          'partial_delivered': 'Entrega Parcial'
         };
         return statusMap[value] || value;
       case 'expenseType':
         return value === 'product' ? 'Venta' : 'Gasto';
       case 'activityType':
-        const typeMap = {
+        const typeMap: Record<string, string> = {
           'transfer': 'Transferencia',
           'fumigation': 'Fumigación',
           'harvest': 'Cosecha',
@@ -547,7 +621,7 @@ const useReportsController = () => {
         };
         return typeMap[value] || value;
       default:
-        return value;
+        return String(value);
     }
   }, []);
 
@@ -563,7 +637,7 @@ const useReportsController = () => {
     reportTitle,
     previewOpen,
     loading: isLoading,
-    error: currentError,
+    error: currentError || '',
     availableOptions,
     reportTypes,
     

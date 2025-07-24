@@ -1,13 +1,131 @@
-// src/controllers/PurchasesController.js - Controlador para compras con logging de actividades
+// src/controllers/PurchasesController.tsx - Controlador para compras con logging de actividades
 import { useState, useEffect, useCallback } from 'react';
 import { usePurchases } from '../contexts/PurchaseContext';
 import { useStock } from '../contexts/StockContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useActivityLogger } from '../hooks/useActivityLogger'; // NUEVO: Hook para logging
+import { useActivityLogger } from '../hooks/useActivityLogger';
 
-const usePurchasesController = () => {
+// Interfaces para TypeScript - Redefinidas para evitar conflictos
+interface ControllerProduct {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  unit?: string;
+}
+
+interface ControllerDelivery {
+  id: string;
+  deliveryNumber: string;
+  date: any; // Firebase Timestamp
+  status: 'pending' | 'completed' | 'cancelled';
+  products: ControllerProduct[];
+  notes?: string;
+}
+
+interface ControllerPurchase {
+  id: string;
+  purchaseNumber: string;
+  supplier: string;
+  purchaseDate?: any; // Firebase Timestamp
+  date?: any; // Firebase Timestamp
+  status: 'pending' | 'approved' | 'partial_delivered' | 'completed' | 'cancelled';
+  products: ControllerProduct[];
+  deliveries?: ControllerDelivery[];
+  totalAmount: number;
+  totalProducts?: number;
+  freight?: number;
+  taxes?: number;
+  notes?: string;
+  totalDelivered?: number;
+  totalPending?: number;
+  totalFreightPaid?: number;
+  approvedBy?: string;
+  approvedDate?: any;
+  invoiceNumber?: string;
+  invoiceDate?: any;
+  createdBy?: string;
+  createdAt?: any;
+  updatedAt?: any;
+  [key: string]: any;
+}
+
+interface Filters {
+  status: string;
+  supplier: string;
+  dateRange: { start: Date | null; end: Date | null };
+  searchTerm: string;
+}
+
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
+interface FilterOptions {
+  status: FilterOption[];
+  suppliers: string[];
+  dateRange: {
+    start: Date | null;
+    end: Date | null;
+  };
+}
+
+interface Statistics {
+  totalPurchases: number;
+  totalAmount: number;
+  pendingPurchases: number;
+  completedPurchases: number;
+  partialDeliveries: number;
+  totalFreightPaid: number;
+}
+
+interface PurchaseChange {
+  field: string;
+  label: string;
+  oldValue: string;
+  newValue: string;
+  type?: string;
+}
+
+interface User {
+  displayName?: string;
+  email?: string;
+}
+
+type DialogType = 'add-purchase' | 'edit-purchase' | 'view-purchase' | 'add-delivery' | 'view-delivery' | '';
+
+interface UsePurchasesControllerReturn {
+  purchases: ControllerPurchase[];
+  warehouses: any[];
+  loading: boolean;
+  error: string;
+  selectedPurchase: ControllerPurchase | null;
+  selectedDelivery: ControllerDelivery | null;
+  dialogOpen: boolean;
+  dialogType: DialogType;
+  filterOptions: FilterOptions;
+  statistics: Statistics;
+  handleAddPurchase: () => void;
+  handleEditPurchase: (purchase: ControllerPurchase) => void;
+  handleViewPurchase: (purchase: ControllerPurchase) => void;
+  handleAddDelivery: (purchase: ControllerPurchase) => void;
+  handleViewDelivery: (purchase: ControllerPurchase, delivery: ControllerDelivery) => void;
+  handleDeletePurchase: (purchaseId: string) => Promise<void>;
+  handleSavePurchase: (purchaseData: Partial<ControllerPurchase>) => Promise<boolean>;
+  handleCreateDelivery: (deliveryData: Partial<ControllerDelivery>) => Promise<boolean>;
+  handleCompleteDelivery: (deliveryId: string) => Promise<void>;
+  handleCancelDelivery: (deliveryId: string) => Promise<void>;
+  handleFilterChange: (filterName: string, value: any) => void;
+  handleSearch: (searchTerm: string) => void;
+  handleCloseDialog: () => void;
+  refreshData: () => Promise<void>;
+}
+
+const usePurchasesController = (): UsePurchasesControllerReturn => {
   const {
-    purchases,
+    purchases: stockPurchases,
     loading: purchasesLoading,
     error: purchasesError,
     loadPurchases,
@@ -27,25 +145,58 @@ const usePurchasesController = () => {
   } = useStock();
 
   const { currentUser } = useAuth();
-  const { logPurchase } = useActivityLogger(); // NUEVO: Hook de logging
+  const { logPurchase } = useActivityLogger();
+
+  // Convertir compras del stock a nuestro tipo local
+  const purchases: ControllerPurchase[] = stockPurchases.map(purchase => {
+    const purchaseAny = purchase as any;
+    
+    const basePurchase: ControllerPurchase = {
+      id: purchaseAny.id || '',
+      purchaseNumber: purchaseAny.purchaseNumber || '',
+      supplier: purchaseAny.supplier || '',
+      purchaseDate: purchaseAny.purchaseDate,
+      date: purchaseAny.date,
+      status: purchaseAny.status || 'pending',
+      products: purchaseAny.products || [],
+      deliveries: purchaseAny.deliveries || [],
+      totalAmount: purchaseAny.totalAmount || 0,
+      totalProducts: purchaseAny.totalProducts,
+      freight: purchaseAny.freight,
+      taxes: purchaseAny.taxes,
+      notes: purchaseAny.notes,
+      totalDelivered: purchaseAny.totalDelivered,
+      totalPending: purchaseAny.totalPending,
+      totalFreightPaid: purchaseAny.totalFreightPaid,
+      approvedBy: purchaseAny.approvedBy,
+      approvedDate: purchaseAny.approvedDate,
+      invoiceNumber: purchaseAny.invoiceNumber,
+      invoiceDate: purchaseAny.invoiceDate,
+      createdBy: purchaseAny.createdBy,
+      createdAt: purchaseAny.createdAt,
+      updatedAt: purchaseAny.updatedAt
+    };
+    
+    return basePurchase;
+  });
 
   // Estados locales
-  const [selectedPurchase, setSelectedPurchase] = useState(null);
-  const [selectedDelivery, setSelectedDelivery] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState(''); // 'add-purchase', 'edit-purchase', 'view-purchase', 'add-delivery', 'view-delivery'
-  const [filters, setFilters] = useState({
+  const [selectedPurchase, setSelectedPurchase] = useState<ControllerPurchase | null>(null);
+  const [selectedDelivery, setSelectedDelivery] = useState<ControllerDelivery | null>(null);
+  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<DialogType>('');
+  const [filters, setFilters] = useState<Filters>({
     status: 'all',
     supplier: '',
     dateRange: { start: null, end: null },
     searchTerm: ''
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filteredPurchasesList, setFilteredPurchasesList] = useState([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+  const [filteredPurchasesList, setFilteredPurchasesList] = useState<ControllerPurchase[]>([]);
 
   // Cargar datos necesarios
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (): Promise<void> => {
     try {
       setError('');
       
@@ -54,7 +205,8 @@ const usePurchasesController = () => {
         warehouses.length === 0 ? loadWarehouses() : Promise.resolve(),
         loadPurchases()
       ]);
-    } catch (err) {
+      
+    } catch (err: any) {
       console.error('Error al cargar datos:', err);
       setError('Error al cargar datos: ' + err.message);
     }
@@ -81,107 +233,104 @@ const usePurchasesController = () => {
   }, [loadData]);
 
   // Filtrar compras según filtros aplicados
-  const getFilteredPurchases = useCallback(() => {
+  const getFilteredPurchases = useCallback((): ControllerPurchase[] => {
     if (!Array.isArray(purchases) || purchases.length === 0) return [];
     
-    return purchases.filter(purchase => {
+    return purchases.filter((purchase: ControllerPurchase) => {
       // Filtro por estado
       if (filters.status !== 'all' && purchase.status !== filters.status) {
         return false;
       }
-      
+
       // Filtro por proveedor
-      if (filters.supplier && !purchase.supplier.toLowerCase().includes(filters.supplier.toLowerCase())) {
-        return false;
+      if (filters.supplier && filters.supplier !== 'all') {
+        if (!purchase.supplier.toLowerCase().includes(filters.supplier.toLowerCase())) {
+          return false;
+        }
       }
-      
-      // Filtro por fecha
+
+      // Filtro por rango de fechas
       if (filters.dateRange.start || filters.dateRange.end) {
-        const purchaseDate = purchase.purchaseDate
-          ? new Date(purchase.purchaseDate.seconds ? purchase.purchaseDate.seconds * 1000 : purchase.purchaseDate)
-          : null;
-        
+        const purchaseDate = purchase.purchaseDate || purchase.date;
         if (!purchaseDate) return false;
         
-        if (filters.dateRange.start) {
-          const startDate = new Date(filters.dateRange.start);
-          if (purchaseDate < startDate) return false;
-        }
+        const date = purchaseDate.seconds 
+          ? new Date(purchaseDate.seconds * 1000)
+          : new Date(purchaseDate);
         
-        if (filters.dateRange.end) {
-          const endDate = new Date(filters.dateRange.end);
-          endDate.setHours(23, 59, 59, 999); // Ajustar al final del día
-          if (purchaseDate > endDate) return false;
-        }
+        const start = filters.dateRange.start;
+        const end = filters.dateRange.end;
+        
+        if (start && date < start) return false;
+        if (end && date > end) return false;
       }
-      
-      // Búsqueda por texto
+
+      // Filtro por término de búsqueda
       if (filters.searchTerm) {
         const term = filters.searchTerm.toLowerCase();
-        return (
-          (purchase.purchaseNumber && purchase.purchaseNumber.toLowerCase().includes(term)) ||
-          (purchase.supplier && purchase.supplier.toLowerCase().includes(term)) ||
-          purchase.products.some(product => 
-            product.name && product.name.toLowerCase().includes(term)
-          )
+        const searchableFields = [
+          purchase.purchaseNumber,
+          purchase.supplier,
+          ...(purchase.products?.map((p: ControllerProduct) => p.name) || [])
+        ].filter(Boolean);
+        
+        const matchesSearch = searchableFields.some(field => 
+          field && field.toString().toLowerCase().includes(term)
         );
+        
+        if (!matchesSearch) return false;
       }
-      
+
       return true;
     });
   }, [purchases, filters]);
 
-  // Actualizar compras filtradas cuando cambian los filtros o compras
+  // Actualizar lista filtrada cuando cambien las compras o filtros
   useEffect(() => {
     setFilteredPurchasesList(getFilteredPurchases());
   }, [getFilteredPurchases]);
 
-  // Abrir diálogo para añadir compra
-  const handleAddPurchase = useCallback(() => {
+  // Handlers para diálogos
+  const handleAddPurchase = useCallback((): void => {
     setSelectedPurchase(null);
-    setSelectedDelivery(null);
     setDialogType('add-purchase');
     setDialogOpen(true);
   }, []);
 
-  // Abrir diálogo para editar compra
-  const handleEditPurchase = useCallback((purchase) => {
+  const handleEditPurchase = useCallback((purchase: ControllerPurchase): void => {
     setSelectedPurchase(purchase);
-    setSelectedDelivery(null);
     setDialogType('edit-purchase');
     setDialogOpen(true);
   }, []);
 
-  // Abrir diálogo para ver detalles de compra
-  const handleViewPurchase = useCallback((purchase) => {
+  const handleViewPurchase = useCallback((purchase: ControllerPurchase): void => {
     setSelectedPurchase(purchase);
-    setSelectedDelivery(null);
     setDialogType('view-purchase');
     setDialogOpen(true);
   }, []);
 
-  // Abrir diálogo para crear entrega
-  const handleAddDelivery = useCallback((purchase) => {
+  const handleAddDelivery = useCallback((purchase: ControllerPurchase): void => {
     setSelectedPurchase(purchase);
     setSelectedDelivery(null);
     setDialogType('add-delivery');
     setDialogOpen(true);
   }, []);
 
-  // Abrir diálogo para ver entrega
-  const handleViewDelivery = useCallback((purchase, delivery) => {
+  const handleViewDelivery = useCallback((purchase: ControllerPurchase, delivery: ControllerDelivery): void => {
     setSelectedPurchase(purchase);
     setSelectedDelivery(delivery);
     setDialogType('view-delivery');
     setDialogOpen(true);
   }, []);
 
-  // MODIFICADO: Confirmar eliminación de compra con logging
-  const handleDeletePurchase = useCallback(async (purchaseId) => {
+  // Eliminar compra con confirmación y logging
+  const handleDeletePurchase = useCallback(async (purchaseId: string): Promise<void> => {
     if (window.confirm('¿Estás seguro de que deseas eliminar esta compra? Esta acción no se puede deshacer.')) {
       try {
+        setError('');
+        
         // Obtener datos de la compra antes de eliminarla
-        const purchaseToDelete = purchases.find(p => p.id === purchaseId);
+        const purchaseToDelete = purchases.find((p: ControllerPurchase) => p.id === purchaseId);
         
         await deletePurchase(purchaseId);
         
@@ -204,27 +353,122 @@ const usePurchasesController = () => {
         if (selectedPurchase && selectedPurchase.id === purchaseId) {
           setDialogOpen(false);
         }
-      } catch (err) {
+        
+        // Recargar datos
+        await loadData();
+      } catch (err: any) {
         console.error('Error al eliminar compra:', err);
         setError('Error al eliminar compra: ' + err.message);
       }
     }
-  }, [deletePurchase, selectedPurchase, purchases, logPurchase, currentUser]);
+  }, [purchases, deletePurchase, logPurchase, currentUser, selectedPurchase, loadData]);
+
+  // NUEVO: Función para detectar cambios en compras
+  const detectPurchaseChanges = useCallback((oldPurchase: ControllerPurchase, newPurchase: Partial<ControllerPurchase>): PurchaseChange[] => {
+    const changes: PurchaseChange[] = [];
+    
+    if (oldPurchase.supplier !== newPurchase.supplier) {
+      changes.push({
+        field: 'supplier',
+        label: 'Proveedor',
+        oldValue: oldPurchase.supplier,
+        newValue: newPurchase.supplier || '',
+        type: 'update'
+      });
+    }
+    
+    if (oldPurchase.totalAmount !== newPurchase.totalAmount) {
+      changes.push({
+        field: 'totalAmount',
+        label: 'Monto total',
+        oldValue: `$${oldPurchase.totalAmount?.toLocaleString()}`,
+        newValue: `$${newPurchase.totalAmount?.toLocaleString()}`,
+        type: (newPurchase.totalAmount || 0) > oldPurchase.totalAmount ? 'increase' : 'decrease'
+      });
+    }
+    
+    if (oldPurchase.status !== newPurchase.status) {
+      const statusMap: Record<string, string> = {
+        'pending': 'Pendiente',
+        'approved': 'Aprobada',
+        'partial_delivered': 'Entrega parcial',
+        'completed': 'Completada',
+        'cancelled': 'Cancelada'
+      };
+      changes.push({
+        field: 'status',
+        label: 'Estado',
+        oldValue: statusMap[oldPurchase.status] || oldPurchase.status,
+        newValue: statusMap[newPurchase.status || ''] || newPurchase.status || '',
+        type: 'status'
+      });
+    }
+    
+    if ((oldPurchase.products?.length || 0) !== (newPurchase.products?.length || 0)) {
+      changes.push({
+        field: 'products',
+        label: 'Productos',
+        oldValue: `${oldPurchase.products?.length || 0} productos`,
+        newValue: `${newPurchase.products?.length || 0} productos`,
+        type: 'update'
+      });
+    }
+    
+    return changes;
+  }, []);
+
+  // NUEVO: Función para generar resumen de cambios
+  const generatePurchaseChangesSummary = (changes: PurchaseChange[]): string => {
+    const summaryParts: string[] = [];
+    
+    changes.forEach(change => {
+      switch (change.type) {
+        case 'increase':
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue} (⬆️)`);
+          break;
+        case 'decrease':
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue} (⬇️)`);
+          break;
+        case 'status':
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue} (📊)`);
+          break;
+        default:
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue}`);
+      }
+    });
+    
+    return summaryParts.join(', ');
+  };
 
   // MODIFICADO: Guardar compra con logging
-  const handleSavePurchase = useCallback(async (purchaseData) => {
+  const handleSavePurchase = useCallback(async (purchaseData: Partial<ControllerPurchase>): Promise<boolean> => {
     try {
-      let purchaseId;
+      setError('');
+      let purchaseId: string;
       
       if (dialogType === 'add-purchase') {
+        // Convertir datos para el contexto
+        const contextPurchaseData: any = {
+          purchaseNumber: purchaseData.purchaseNumber,
+          supplier: purchaseData.supplier,
+          purchaseDate: purchaseData.purchaseDate || purchaseData.date,
+          products: purchaseData.products,
+          totalAmount: purchaseData.totalAmount,
+          totalProducts: purchaseData.totalProducts,
+          freight: purchaseData.freight,
+          taxes: purchaseData.taxes,
+          status: purchaseData.status || 'pending',
+          notes: purchaseData.notes
+        };
+        
         // Crear nueva compra
-        purchaseId = await addPurchase(purchaseData);
+        purchaseId = await addPurchase(contextPurchaseData);
         
         // NUEVO: Registrar actividad de creación
         await logPurchase('create', {
           id: purchaseId,
-          purchaseNumber: purchaseData.purchaseNumber,
-          supplier: purchaseData.supplier
+          purchaseNumber: purchaseData.purchaseNumber || 'Generado automáticamente',
+          supplier: purchaseData.supplier || ''
         }, {
           totalAmount: purchaseData.totalAmount || 0,
           productsCount: purchaseData.products?.length || 0,
@@ -237,14 +481,30 @@ const usePurchasesController = () => {
         });
         
       } else if (dialogType === 'edit-purchase' && selectedPurchase) {
-        // Actualizar compra existente
-        purchaseId = await updatePurchase(selectedPurchase.id, purchaseData);
+        // Convertir datos para el contexto
+        const contextPurchaseData: any = {
+          purchaseNumber: purchaseData.purchaseNumber,
+          supplier: purchaseData.supplier,
+          purchaseDate: purchaseData.purchaseDate || purchaseData.date,
+          products: purchaseData.products,
+          totalAmount: purchaseData.totalAmount,
+          totalProducts: purchaseData.totalProducts,
+          freight: purchaseData.freight,
+          taxes: purchaseData.taxes,
+          status: purchaseData.status,
+          notes: purchaseData.notes
+        };
         
-        // NUEVO: Registrar actividad de actualización
+        // Actualizar compra existente
+        purchaseId = await updatePurchase(selectedPurchase.id, contextPurchaseData);
+        
+        // NUEVO: Registrar actividad de actualización con detección de cambios
+        const changes = detectPurchaseChanges(selectedPurchase, purchaseData);
+        
         await logPurchase('update', {
           id: selectedPurchase.id,
-          purchaseNumber: purchaseData.purchaseNumber,
-          supplier: purchaseData.supplier
+          purchaseNumber: purchaseData.purchaseNumber || selectedPurchase.purchaseNumber,
+          supplier: purchaseData.supplier || selectedPurchase.supplier
         }, {
           totalAmount: purchaseData.totalAmount || 0,
           productsCount: purchaseData.products?.length || 0,
@@ -252,161 +512,124 @@ const usePurchasesController = () => {
           newStatus: purchaseData.status,
           previousAmount: selectedPurchase.totalAmount,
           newAmount: purchaseData.totalAmount,
-          updatedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
-          changes: detectPurchaseChanges(selectedPurchase, purchaseData)
+          changes: changes,
+          changesCount: changes.length,
+          changesSummary: changes.length > 0 ? 
+            generatePurchaseChangesSummary(changes) : 
+            'Sin cambios detectados',
+          updatedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
         });
       }
       
+      // Cerrar diálogo y recargar datos
       setDialogOpen(false);
-      await loadPurchases();
+      setSelectedPurchase(null);
+      await loadData();
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al guardar compra:', err);
       setError('Error al guardar compra: ' + err.message);
       throw err;
     }
-  }, [dialogType, selectedPurchase, addPurchase, updatePurchase, loadPurchases, currentUser, logPurchase]);
-
-  // NUEVO: Función para detectar cambios en compras
-  const detectPurchaseChanges = useCallback((oldPurchase, newPurchase) => {
-    const changes = [];
-    
-    if (oldPurchase.supplier !== newPurchase.supplier) {
-      changes.push(`Proveedor: ${oldPurchase.supplier} → ${newPurchase.supplier}`);
-    }
-    
-    if (oldPurchase.totalAmount !== newPurchase.totalAmount) {
-      changes.push(`Monto total: $${oldPurchase.totalAmount?.toLocaleString()} → $${newPurchase.totalAmount?.toLocaleString()}`);
-    }
-    
-    if (oldPurchase.status !== newPurchase.status) {
-      const statusMap = {
-        'pending': 'Pendiente',
-        'approved': 'Aprobada',
-        'partial_delivered': 'Entrega parcial',
-        'completed': 'Completada',
-        'cancelled': 'Cancelada'
-      };
-      changes.push(`Estado: ${statusMap[oldPurchase.status]} → ${statusMap[newPurchase.status]}`);
-    }
-    
-    if ((oldPurchase.products?.length || 0) !== (newPurchase.products?.length || 0)) {
-      changes.push(`Productos: ${oldPurchase.products?.length || 0} → ${newPurchase.products?.length || 0}`);
-    }
-    
-    return changes;
-  }, []);
+  }, [dialogType, selectedPurchase, addPurchase, updatePurchase, logPurchase, currentUser, loadData, detectPurchaseChanges]);
 
   // MODIFICADO: Crear entrega con logging
-  const handleCreateDelivery = useCallback(async (deliveryData) => {
+  const handleCreateDelivery = useCallback(async (deliveryData: Partial<ControllerDelivery>): Promise<boolean> => {
+    if (!selectedPurchase) return false;
+    
     try {
-      if (!selectedPurchase) return;
+      setError('');
       
-      await createDelivery(selectedPurchase.id, deliveryData);
+      // Convertir datos para el contexto
+      const contextDeliveryData: any = {
+        deliveryNumber: deliveryData.deliveryNumber,
+        date: deliveryData.date,
+        status: deliveryData.status || 'pending',
+        products: deliveryData.products,
+        notes: deliveryData.notes
+      };
+      
+      await createDelivery(selectedPurchase.id, contextDeliveryData);
       
       // NUEVO: Registrar actividad de creación de entrega
-      const warehouseName = warehouses.find(w => w.id === deliveryData.warehouseId)?.name || 'Almacén desconocido';
-      
-      await logPurchase('delivery-create', {
+      await logPurchase('delivery_created', {
         id: selectedPurchase.id,
         purchaseNumber: selectedPurchase.purchaseNumber,
         supplier: selectedPurchase.supplier
       }, {
-        warehouse: warehouseName,
-        warehouseId: deliveryData.warehouseId,
+        deliveryNumber: deliveryData.deliveryNumber,
+        deliveryDate: deliveryData.date,
         productsCount: deliveryData.products?.length || 0,
-        totalQuantity: deliveryData.products?.reduce((sum, p) => sum + (p.quantity || 0), 0) || 0,
-        freight: deliveryData.freight || 0,
-        deliveryDate: deliveryData.deliveryDate,
         createdBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
         notes: deliveryData.notes
       });
       
+      // Cerrar diálogo y recargar datos
       setDialogOpen(false);
-      await loadPurchases();
+      setSelectedDelivery(null);
+      await loadData();
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al crear entrega:', err);
       setError('Error al crear entrega: ' + err.message);
       throw err;
     }
-  }, [selectedPurchase, createDelivery, loadPurchases, currentUser, logPurchase, warehouses]);
+  }, [selectedPurchase, createDelivery, logPurchase, currentUser, loadData]);
 
   // MODIFICADO: Completar entrega con logging
-  const handleCompleteDelivery = useCallback(async (purchaseId, deliveryId) => {
-    if (window.confirm('¿Confirmas que la entrega ha llegado y deseas añadir los productos al inventario?')) {
-      try {
-        // Obtener datos de la compra y entrega antes de completar
-        const purchase = purchases.find(p => p.id === purchaseId);
-        const delivery = purchase?.deliveries?.find(d => d.id === deliveryId);
-        
-        await completeDelivery(purchaseId, deliveryId);
-        
-        // NUEVO: Registrar actividad de completar entrega
-        if (purchase && delivery) {
-          const warehouseName = warehouses.find(w => w.id === delivery.warehouseId)?.name || 'Almacén desconocido';
-          
-          await logPurchase('delivery-complete', {
-            id: purchaseId,
-            purchaseNumber: purchase.purchaseNumber,
-            supplier: purchase.supplier
-          }, {
-            deliveryId: deliveryId,
-            warehouse: warehouseName,
-            warehouseId: delivery.warehouseId,
-            productsReceived: delivery.products?.length || 0,
-            totalQuantityReceived: delivery.products?.reduce((sum, p) => sum + (p.quantity || 0), 0) || 0,
-            stockAdded: true,
-            freight: delivery.freight || 0,
-            completedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
-            completionDate: new Date()
-          });
-        }
-      } catch (err) {
-        console.error('Error al completar entrega:', err);
-        setError('Error al completar entrega: ' + err.message);
-      }
+  const handleCompleteDelivery = useCallback(async (deliveryId: string): Promise<void> => {
+    if (!selectedPurchase) return;
+    
+    try {
+      setError('');
+      
+      await completeDelivery(selectedPurchase.id, deliveryId);
+      
+      // NUEVO: Registrar actividad de completar entrega
+      await logPurchase('delivery_completed', {
+        id: selectedPurchase.id,
+        purchaseNumber: selectedPurchase.purchaseNumber,
+        supplier: selectedPurchase.supplier
+      }, {
+        deliveryId,
+        completedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
+      });
+      
+      await loadData();
+    } catch (err: any) {
+      console.error('Error al completar entrega:', err);
+      setError('Error al completar entrega: ' + err.message);
     }
-  }, [completeDelivery, purchases, warehouses, currentUser, logPurchase]);
+  }, [selectedPurchase, completeDelivery, logPurchase, currentUser, loadData]);
 
   // MODIFICADO: Cancelar entrega con logging
-  const handleCancelDelivery = useCallback(async (purchaseId, deliveryId) => {
-    const reason = window.prompt('¿Por qué deseas cancelar esta entrega? (opcional)');
-    if (reason !== null) { // El usuario no canceló el prompt
-      try {
-        // Obtener datos antes de cancelar
-        const purchase = purchases.find(p => p.id === purchaseId);
-        const delivery = purchase?.deliveries?.find(d => d.id === deliveryId);
-        
-        await cancelDelivery(purchaseId, deliveryId, reason);
-        
-        // NUEVO: Registrar actividad de cancelar entrega
-        if (purchase && delivery) {
-          const warehouseName = warehouses.find(w => w.id === delivery.warehouseId)?.name || 'Almacén desconocido';
-          
-          await logPurchase('delivery-cancel', {
-            id: purchaseId,
-            purchaseNumber: purchase.purchaseNumber,
-            supplier: purchase.supplier
-          }, {
-            deliveryId: deliveryId,
-            warehouse: warehouseName,
-            warehouseId: delivery.warehouseId,
-            reason: reason || 'Sin motivo especificado',
-            productsAffected: delivery.products?.length || 0,
-            cancelledBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
-            cancellationDate: new Date()
-          });
-        }
-      } catch (err) {
-        console.error('Error al cancelar entrega:', err);
-        setError('Error al cancelar entrega: ' + err.message);
-      }
+  const handleCancelDelivery = useCallback(async (deliveryId: string): Promise<void> => {
+    if (!selectedPurchase) return;
+    
+    try {
+      setError('');
+      
+      await cancelDelivery(selectedPurchase.id, deliveryId);
+      
+      // NUEVO: Registrar actividad de cancelar entrega
+      await logPurchase('delivery_cancelled', {
+        id: selectedPurchase.id,
+        purchaseNumber: selectedPurchase.purchaseNumber,
+        supplier: selectedPurchase.supplier
+      }, {
+        deliveryId,
+        cancelledBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
+      });
+      
+      await loadData();
+    } catch (err: any) {
+      console.error('Error al cancelar entrega:', err);
+      setError('Error al cancelar entrega: ' + err.message);
     }
-  }, [cancelDelivery, purchases, warehouses, currentUser, logPurchase]);
+  }, [selectedPurchase, cancelDelivery, logPurchase, currentUser, loadData]);
 
   // Cambiar filtros
-  const handleFilterChange = useCallback((filterName, value) => {
+  const handleFilterChange = useCallback((filterName: string, value: any): void => {
     setFilters(prev => ({
       ...prev,
       [filterName]: value
@@ -414,7 +637,7 @@ const usePurchasesController = () => {
   }, []);
 
   // Buscar por texto
-  const handleSearch = useCallback((searchTerm) => {
+  const handleSearch = useCallback((searchTerm: string): void => {
     setFilters(prev => ({
       ...prev,
       searchTerm
@@ -422,16 +645,16 @@ const usePurchasesController = () => {
   }, []);
 
   // Cerrar diálogo
-  const handleCloseDialog = useCallback(() => {
+  const handleCloseDialog = useCallback((): void => {
     setDialogOpen(false);
     setSelectedPurchase(null);
     setSelectedDelivery(null);
   }, []);
 
-  // Obtener productos únicos de todas las compras para el filtro
-  const getUniqueSuppliers = useCallback(() => {
-    const suppliers = new Set();
-    purchases.forEach(purchase => {
+  // Obtener proveedores únicos de todas las compras para el filtro
+  const getUniqueSuppliers = useCallback((): string[] => {
+    const suppliers = new Set<string>();
+    purchases.forEach((purchase: ControllerPurchase) => {
       if (purchase.supplier) {
         suppliers.add(purchase.supplier);
       }
@@ -440,13 +663,13 @@ const usePurchasesController = () => {
   }, [purchases]);
 
   // Calcular estadísticas de compras
-  const getStatistics = useCallback(() => {
+  const getStatistics = useCallback((): Statistics => {
     const totalPurchases = purchases.length;
-    const totalAmount = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
-    const pendingPurchases = purchases.filter(p => p.status === 'pending').length;
-    const completedPurchases = purchases.filter(p => p.status === 'completed').length;
-    const partialDeliveries = purchases.filter(p => p.status === 'partial_delivered').length;
-    const totalFreightPaid = purchases.reduce((sum, purchase) => sum + (purchase.totalFreightPaid || 0), 0);
+    const totalAmount = purchases.reduce((sum: number, purchase: ControllerPurchase) => sum + purchase.totalAmount, 0);
+    const pendingPurchases = purchases.filter((p: ControllerPurchase) => p.status === 'pending').length;
+    const completedPurchases = purchases.filter((p: ControllerPurchase) => p.status === 'completed').length;
+    const partialDeliveries = purchases.filter((p: ControllerPurchase) => p.status === 'partial_delivered').length;
+    const totalFreightPaid = purchases.reduce((sum: number, purchase: ControllerPurchase) => sum + (purchase.totalFreightPaid || 0), 0);
     
     return {
       totalPurchases,
@@ -459,7 +682,7 @@ const usePurchasesController = () => {
   }, [purchases]);
 
   // Opciones para filtros
-  const filterOptions = {
+  const filterOptions: FilterOptions = {
     status: [
       { value: 'all', label: 'Todos los estados' },
       { value: 'pending', label: 'Pendiente' },

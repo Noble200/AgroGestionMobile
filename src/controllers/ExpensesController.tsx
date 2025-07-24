@@ -5,36 +5,12 @@ import { useStock } from '../contexts/StockContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useActivityLogger } from '../hooks/useActivityLogger';
 
-// Tipos TypeScript
-interface FilterOptions {
-  type: string;
-  category: string;
-  dateRange: {
-    start: Date | null;
-    end: Date | null;
-  };
-  searchTerm: string;
-}
-
-interface FilterSelectOption {
-  value: string;
-  label: string;
-}
-
-interface Statistics {
-  totalExpenses: number;
-  productExpenses: number;
-  miscExpenses: number;
-  totalAmount: number;
-  totalProductsSold: number;
-  thisMonthExpenses: number;
-  thisMonthAmount: number;
-}
-
-interface ExpenseData {
+// Interfaces para TypeScript - Redefinidas para evitar conflictos
+interface ControllerExpense {
+  id: string;
   expenseNumber?: string;
   type: 'product' | 'misc';
-  date: Date | any;
+  date: any;
   amount?: number;
   totalAmount?: number;
   category?: string;
@@ -47,17 +23,79 @@ interface ExpenseData {
   unitPrice?: number;
   saleReason?: string;
   notes?: string;
-}
-
-interface Expense extends ExpenseData {
-  id: string;
   createdBy?: string;
   stockAdjusted?: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+  [key: string]: any;
 }
 
-const useExpensesController = () => {
+interface Filters {
+  type: string;
+  category: string;
+  dateRange: {
+    start: Date | null;
+    end: Date | null;
+  };
+  searchTerm: string;
+}
+
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
+interface FilterOptions {
+  types: FilterOption[];
+  categories: FilterOption[];
+  dateRange: {
+    start: Date | null;
+    end: Date | null;
+  };
+}
+
+interface Statistics {
+  totalExpenses: number;
+  productExpenses: number;
+  miscExpenses: number;
+  totalAmount: number;
+  totalProductsSold: number;
+  thisMonthExpenses: number;
+  thisMonthAmount: number;
+}
+
+interface ExpenseChange {
+  field: string;
+  label: string;
+  oldValue: string;
+  newValue: string;
+  type?: string;
+}
+
+interface UseExpensesControllerReturn {
+  expenses: ControllerExpense[];
+  products: any[];
+  loading: boolean;
+  error: string;
+  selectedExpense: ControllerExpense | null;
+  dialogOpen: boolean;
+  dialogType: string;
+  filterOptions: FilterOptions;
+  statistics: Statistics;
+  handleAddExpense: () => void;
+  handleEditExpense: (expense: ControllerExpense) => void;
+  handleViewExpense: (expense: ControllerExpense) => void;
+  handleDeleteExpense: (expenseId: string) => Promise<void>;
+  handleSaveExpense: (expenseData: Partial<ControllerExpense>) => Promise<boolean>;
+  handleFilterChange: (filterName: string, value: any) => void;
+  handleSearch: (searchTerm: string) => void;
+  handleCloseDialog: () => void;
+  refreshData: () => Promise<void>;
+}
+
+const useExpensesController = (): UseExpensesControllerReturn => {
   const {
-    expenses,
+    expenses: stockExpenses,
     loading: expensesLoading,
     error: expensesError,
     loadExpenses,
@@ -76,11 +114,41 @@ const useExpensesController = () => {
   const { currentUser } = useAuth();
   const { logExpense } = useActivityLogger();
 
+  // Convertir gastos del stock a nuestro tipo local
+  const expenses: ControllerExpense[] = stockExpenses.map(expense => {
+    const expenseAny = expense as any;
+    
+    const baseExpense: ControllerExpense = {
+      id: expenseAny.id || '',
+      expenseNumber: expenseAny.expenseNumber,
+      type: expenseAny.type || 'misc',
+      date: expenseAny.date,
+      amount: expenseAny.amount,
+      totalAmount: expenseAny.totalAmount,
+      category: expenseAny.category,
+      productCategory: expenseAny.productCategory,
+      productName: expenseAny.productName,
+      productId: expenseAny.productId,
+      supplier: expenseAny.supplier,
+      description: expenseAny.description,
+      quantitySold: expenseAny.quantitySold,
+      unitPrice: expenseAny.unitPrice,
+      saleReason: expenseAny.saleReason,
+      notes: expenseAny.notes,
+      createdBy: expenseAny.createdBy,
+      stockAdjusted: expenseAny.stockAdjusted,
+      createdAt: expenseAny.createdAt,
+      updatedAt: expenseAny.updatedAt
+    };
+    
+    return baseExpense;
+  });
+
   // Estados locales
-  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<ControllerExpense | null>(null);
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [dialogType, setDialogType] = useState<string>(''); // 'add-expense', 'edit-expense', 'view-expense'
-  const [filters, setFilters] = useState<FilterOptions>({
+  const [filters, setFilters] = useState<Filters>({
     type: 'all',
     category: 'all',
     dateRange: { start: null, end: null },
@@ -88,7 +156,7 @@ const useExpensesController = () => {
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
-  const [filteredExpensesList, setFilteredExpensesList] = useState<Expense[]>([]);
+  const [filteredExpensesList, setFilteredExpensesList] = useState<ControllerExpense[]>([]);
 
   // Cargar datos necesarios
   const loadData = useCallback(async (): Promise<void> => {
@@ -127,10 +195,10 @@ const useExpensesController = () => {
   }, [loadData]);
 
   // Filtrar gastos según filtros aplicados
-  const getFilteredExpenses = useCallback((): Expense[] => {
+  const getFilteredExpenses = useCallback((): ControllerExpense[] => {
     if (!Array.isArray(expenses) || expenses.length === 0) return [];
     
-    return expenses.filter((expense: Expense) => {
+    return expenses.filter((expense: ControllerExpense) => {
       // Filtro por tipo
       if (filters.type !== 'all' && expense.type !== filters.type) {
         return false;
@@ -192,21 +260,21 @@ const useExpensesController = () => {
   }, [getFilteredExpenses]);
 
   // Abrir diálogo para agregar gasto
-  const handleAddExpense = useCallback(() => {
+  const handleAddExpense = useCallback((): void => {
     setSelectedExpense(null);
     setDialogType('add-expense');
     setDialogOpen(true);
   }, []);
 
   // Abrir diálogo para editar gasto
-  const handleEditExpense = useCallback((expense: Expense) => {
+  const handleEditExpense = useCallback((expense: ControllerExpense): void => {
     setSelectedExpense(expense);
     setDialogType('edit-expense');
     setDialogOpen(true);
   }, []);
 
   // Abrir diálogo para ver gasto
-  const handleViewExpense = useCallback((expense: Expense) => {
+  const handleViewExpense = useCallback((expense: ControllerExpense): void => {
     setSelectedExpense(expense);
     setDialogType('view-expense');
     setDialogOpen(true);
@@ -214,106 +282,209 @@ const useExpensesController = () => {
 
   // Eliminar gasto
   const handleDeleteExpense = useCallback(async (expenseId: string): Promise<void> => {
-    try {
-      setError('');
+    if (window.confirm('¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer.')) {
+      try {
+        setError('');
+        
+        // Buscar el gasto antes de eliminarlo para el logging
+        const expenseToDelete = expenses.find((exp: ControllerExpense) => exp.id === expenseId);
+        
+        await deleteExpense(expenseId);
+        
+        // NUEVO: Registrar actividad de eliminación
+        if (expenseToDelete) {
+          await logExpense('delete', {
+            id: expenseId,
+            expenseNumber: expenseToDelete.expenseNumber || 'Sin número',
+            type: expenseToDelete.type
+          }, {
+            amount: expenseToDelete.type === 'product' ? expenseToDelete.totalAmount : expenseToDelete.amount,
+            category: expenseToDelete.type === 'product' ? expenseToDelete.productCategory : expenseToDelete.category,
+            productName: expenseToDelete.productName,
+            supplier: expenseToDelete.supplier,
+            description: expenseToDelete.description,
+            deletedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
+          });
+        }
+        
+        if (selectedExpense && selectedExpense.id === expenseId) {
+          setDialogOpen(false);
+        }
+        
+        // Recargar datos
+        await loadData();
+      } catch (err: any) {
+        console.error('Error al eliminar gasto:', err);
+        setError('Error al eliminar gasto: ' + err.message);
+      }
+    }
+  }, [expenses, deleteExpense, logExpense, currentUser, selectedExpense, loadData]);
+
+  // NUEVO: Función para detectar cambios entre gastos
+  const detectExpenseChanges = useCallback((currentExpense: ControllerExpense, newData: Partial<ControllerExpense>): ExpenseChange[] => {
+    const changes: ExpenseChange[] = [];
+    
+    const fieldsToMonitor: Record<string, string> = {
+      description: 'Descripción',
+      supplier: 'Proveedor',
+      productName: 'Producto',
+      quantitySold: 'Cantidad vendida',
+      unitPrice: 'Precio unitario',
+      notes: 'Notas',
+      saleReason: 'Razón de venta'
+    };
+    
+    for (const [field, label] of Object.entries(fieldsToMonitor)) {
+      const oldValue = (currentExpense as any)[field];
+      const newValue = (newData as any)[field];
       
-      // Buscar el gasto antes de eliminarlo para el logging
-      const expenseToDelete = expenses.find((exp: Expense) => exp.id === expenseId);
-      
-      await deleteExpense(expenseId);
-      
-      // Registrar actividad de eliminación
-      if (expenseToDelete) {
-        await logExpense('delete', {
-          id: expenseId,
-          expenseNumber: expenseToDelete.expenseNumber || 'Sin número',
-          type: expenseToDelete.type
-        }, {
-          amount: expenseToDelete.type === 'product' ? expenseToDelete.totalAmount : expenseToDelete.amount,
-          category: expenseToDelete.type === 'product' ? expenseToDelete.productCategory : expenseToDelete.category,
-          productName: expenseToDelete.productName,
-          supplier: expenseToDelete.supplier,
-          description: expenseToDelete.description,
-          deletedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
+      if (oldValue !== newValue && !(oldValue == null && newValue == null)) {
+        changes.push({
+          field,
+          label,
+          oldValue: formatExpenseValue(oldValue, field),
+          newValue: formatExpenseValue(newValue, field),
+          type: getExpenseChangeType(field, oldValue, newValue)
         });
       }
-      
-      // Recargar datos
-      await loadData();
-    } catch (err: any) {
-      console.error('Error al eliminar gasto:', err);
-      setError('Error al eliminar gasto: ' + err.message);
     }
-  }, [expenses, deleteExpense, logExpense, currentUser, loadData]);
-
-  // Detectar cambios entre gastos para logging
-  const detectExpenseChanges = useCallback((oldExpense: Expense, newExpense: ExpenseData): string[] => {
-    const changes: string[] = [];
     
     // Cambios en monto
-    const oldAmount = oldExpense.type === 'product' ? oldExpense.totalAmount : oldExpense.amount;
-    const newAmount = newExpense.type === 'product' ? newExpense.totalAmount : newExpense.amount;
+    const oldAmount = currentExpense.type === 'product' ? currentExpense.totalAmount : currentExpense.amount;
+    const newAmount = newData.type === 'product' ? newData.totalAmount : newData.amount;
     if (oldAmount !== newAmount) {
-      changes.push(`Monto: $${oldAmount || 0} → $${newAmount || 0}`);
-    }
-    
-    // Cambios en descripción
-    if (oldExpense.description !== newExpense.description) {
-      changes.push(`Descripción: ${oldExpense.description || 'Sin descripción'} → ${newExpense.description || 'Sin descripción'}`);
-    }
-    
-    // Cambios en proveedor (solo para gastos varios)
-    if (oldExpense.supplier !== newExpense.supplier) {
-      changes.push(`Proveedor: ${oldExpense.supplier || 'Sin proveedor'} → ${newExpense.supplier || 'Sin proveedor'}`);
-    }
-    
-    // Cambios en producto (solo para ventas)
-    if (oldExpense.productName !== newExpense.productName) {
-      changes.push(`Producto: ${oldExpense.productName || 'Sin producto'} → ${newExpense.productName || 'Sin producto'}`);
-    }
-    
-    // Cambios en cantidad vendida
-    if (oldExpense.quantitySold !== newExpense.quantitySold) {
-      changes.push(`Cantidad: ${oldExpense.quantitySold || 0} → ${newExpense.quantitySold || 0}`);
+      changes.push({
+        field: 'amount',
+        label: 'Monto',
+        oldValue: `$${oldAmount || 0}`,
+        newValue: `$${newAmount || 0}`,
+        type: (newAmount || 0) > (oldAmount || 0) ? 'increase' : 'decrease'
+      });
     }
     
     // Cambios en categoría
-    const oldCategory = oldExpense.type === 'product' ? oldExpense.productCategory : oldExpense.category;
-    const newCategory = newExpense.type === 'product' ? newExpense.productCategory : newExpense.category;
+    const oldCategory = currentExpense.type === 'product' ? currentExpense.productCategory : currentExpense.category;
+    const newCategory = newData.type === 'product' ? newData.productCategory : newData.category;
     if (oldCategory !== newCategory) {
-      changes.push(`Categoría: ${oldCategory || 'Sin categoría'} → ${newCategory || 'Sin categoría'}`);
+      changes.push({
+        field: 'category',
+        label: 'Categoría',
+        oldValue: oldCategory || 'Sin categoría',
+        newValue: newCategory || 'Sin categoría',
+        type: 'category'
+      });
     }
     
     // Cambios en fecha
-    const oldDate = oldExpense.date 
-      ? new Date(oldExpense.date.seconds ? oldExpense.date.seconds * 1000 : oldExpense.date)
+    const oldDate = currentExpense.date 
+      ? new Date(currentExpense.date.seconds ? currentExpense.date.seconds * 1000 : currentExpense.date)
       : null;
-    const newDate = newExpense.date 
-      ? new Date(newExpense.date.seconds ? newExpense.date.seconds * 1000 : newExpense.date)
+    const newDate = newData.date 
+      ? new Date(newData.date.seconds ? newData.date.seconds * 1000 : newData.date)
       : null;
       
     if (oldDate && newDate && oldDate.getTime() !== newDate.getTime()) {
-      changes.push(`Fecha: ${oldDate.toLocaleDateString('es-ES')} → ${newDate.toLocaleDateString('es-ES')}`);
+      changes.push({
+        field: 'date',
+        label: 'Fecha',
+        oldValue: oldDate.toLocaleDateString('es-ES'),
+        newValue: newDate.toLocaleDateString('es-ES'),
+        type: 'date'
+      });
     }
     
     return changes;
   }, []);
 
+  // NUEVO: Función para formatear valores según el tipo de campo
+  const formatExpenseValue = (value: any, field: string): string => {
+    if (value == null) return 'Sin definir';
+    
+    switch (field) {
+      case 'quantitySold':
+        return `${value} unidades`;
+      case 'unitPrice':
+        return `$${value}`;
+      default:
+        return String(value);
+    }
+  };
+
+  // NUEVO: Función para determinar el tipo de cambio
+  const getExpenseChangeType = (field: string, oldValue: any, newValue: any): string => {
+    switch (field) {
+      case 'quantitySold':
+      case 'unitPrice':
+        const oldNum = Number(oldValue) || 0;
+        const newNum = Number(newValue) || 0;
+        if (newNum > oldNum) return 'increase';
+        if (newNum < oldNum) return 'decrease';
+        return 'update';
+      default:
+        return 'update';
+    }
+  };
+
+  // NUEVO: Función para generar resumen de cambios
+  const generateExpenseChangesSummary = (changes: ExpenseChange[]): string => {
+    const summaryParts: string[] = [];
+    
+    changes.forEach(change => {
+      switch (change.type) {
+        case 'increase':
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue} (⬆️)`);
+          break;
+        case 'decrease':
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue} (⬇️)`);
+          break;
+        case 'category':
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue} (📊)`);
+          break;
+        case 'date':
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue} (📅)`);
+          break;
+        default:
+          summaryParts.push(`${change.label}: ${change.oldValue} → ${change.newValue}`);
+      }
+    });
+    
+    return summaryParts.join(', ');
+  };
+
   // Guardar gasto (crear o actualizar)
-  const handleSaveExpense = useCallback(async (expenseData: ExpenseData): Promise<void> => {
+  const handleSaveExpense = useCallback(async (expenseData: Partial<ControllerExpense>): Promise<boolean> => {
     try {
       setError('');
       let expenseId: string;
       
       if (dialogType === 'add-expense') {
-        // Crear nuevo gasto
-        expenseId = await addExpense(expenseData);
+        // Convertir datos para el contexto
+        const contextExpenseData = {
+          expenseNumber: expenseData.expenseNumber,
+          type: expenseData.type || 'misc',
+          date: expenseData.date,
+          amount: expenseData.amount,
+          totalAmount: expenseData.totalAmount,
+          category: expenseData.category,
+          productCategory: expenseData.productCategory,
+          productName: expenseData.productName,
+          productId: expenseData.productId,
+          supplier: expenseData.supplier,
+          description: expenseData.description,
+          quantitySold: expenseData.quantitySold,
+          unitPrice: expenseData.unitPrice,
+          saleReason: expenseData.saleReason,
+          notes: expenseData.notes
+        };
         
-        // Registrar actividad de creación
+        // Crear nuevo gasto
+        expenseId = await addExpense(contextExpenseData);
+        
+        // NUEVO: Registrar actividad de creación
         await logExpense('create', {
           id: expenseId,
           expenseNumber: expenseData.expenseNumber || 'Generado automáticamente',
-          type: expenseData.type
+          type: expenseData.type || 'misc'
         }, {
           amount: expenseData.type === 'product' ? expenseData.totalAmount : expenseData.amount,
           category: expenseData.type === 'product' ? expenseData.productCategory : expenseData.category,
@@ -330,16 +501,35 @@ const useExpensesController = () => {
         });
         
       } else if (dialogType === 'edit-expense' && selectedExpense) {
-        // Actualizar gasto existente
-        expenseId = await updateExpense(selectedExpense.id, expenseData);
+        // Convertir datos para el contexto
+        const contextExpenseData = {
+          expenseNumber: expenseData.expenseNumber,
+          type: expenseData.type,
+          date: expenseData.date,
+          amount: expenseData.amount,
+          totalAmount: expenseData.totalAmount,
+          category: expenseData.category,
+          productCategory: expenseData.productCategory,
+          productName: expenseData.productName,
+          productId: expenseData.productId,
+          supplier: expenseData.supplier,
+          description: expenseData.description,
+          quantitySold: expenseData.quantitySold,
+          unitPrice: expenseData.unitPrice,
+          saleReason: expenseData.saleReason,
+          notes: expenseData.notes
+        };
         
-        // Registrar actividad de actualización con detección de cambios
+        // Actualizar gasto existente
+        expenseId = await updateExpense(selectedExpense.id, contextExpenseData);
+        
+        // NUEVO: Registrar actividad de actualización con detección de cambios
         const changes = detectExpenseChanges(selectedExpense, expenseData);
         
         await logExpense('update', {
           id: selectedExpense.id,
           expenseNumber: expenseData.expenseNumber || 'Sin número',
-          type: expenseData.type
+          type: expenseData.type || selectedExpense.type
         }, {
           amount: expenseData.type === 'product' ? expenseData.totalAmount : expenseData.amount,
           previousAmount: selectedExpense.type === 'product' ? selectedExpense.totalAmount : selectedExpense.amount,
@@ -350,7 +540,7 @@ const useExpensesController = () => {
           changes: changes,
           changesCount: changes.length,
           changesSummary: changes.length > 0 ? 
-            `${changes.length} cambio${changes.length > 1 ? 's' : ''}: ${changes.join(', ')}` : 
+            generateExpenseChangesSummary(changes) : 
             'Sin cambios detectados',
           updatedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
           notes: expenseData.notes
@@ -361,15 +551,17 @@ const useExpensesController = () => {
       setDialogOpen(false);
       setSelectedExpense(null);
       await loadData();
+      return true;
       
     } catch (err: any) {
       console.error('Error al guardar gasto:', err);
       setError('Error al guardar gasto: ' + err.message);
+      throw err;
     }
   }, [dialogType, selectedExpense, addExpense, updateExpense, logExpense, currentUser, loadData, detectExpenseChanges]);
 
   // Cambiar filtros
-  const handleFilterChange = useCallback((filterName: keyof FilterOptions, value: any) => {
+  const handleFilterChange = useCallback((filterName: string, value: any): void => {
     setFilters(prev => ({
       ...prev,
       [filterName]: value
@@ -377,7 +569,7 @@ const useExpensesController = () => {
   }, []);
 
   // Buscar por texto
-  const handleSearch = useCallback((searchTerm: string) => {
+  const handleSearch = useCallback((searchTerm: string): void => {
     setFilters(prev => ({
       ...prev,
       searchTerm
@@ -385,7 +577,7 @@ const useExpensesController = () => {
   }, []);
 
   // Cerrar diálogo
-  const handleCloseDialog = useCallback(() => {
+  const handleCloseDialog = useCallback((): void => {
     setDialogOpen(false);
     setSelectedExpense(null);
   }, []);
@@ -402,7 +594,7 @@ const useExpensesController = () => {
     });
     
     // Categorías de gastos varios
-    expenses.forEach((expense: Expense) => {
+    expenses.forEach((expense: ControllerExpense) => {
       if (expense.type === 'misc' && expense.category) {
         categories.add(expense.category);
       }
@@ -414,10 +606,10 @@ const useExpensesController = () => {
   // Calcular estadísticas de gastos
   const getStatistics = useCallback((): Statistics => {
     const totalExpenses = expenses.length;
-    const productExpenses = expenses.filter((e: Expense) => e.type === 'product').length;
-    const miscExpenses = expenses.filter((e: Expense) => e.type === 'misc').length;
+    const productExpenses = expenses.filter((e: ControllerExpense) => e.type === 'product').length;
+    const miscExpenses = expenses.filter((e: ControllerExpense) => e.type === 'misc').length;
     
-    const totalAmount = expenses.reduce((sum: number, expense: Expense) => {
+    const totalAmount = expenses.reduce((sum: number, expense: ControllerExpense) => {
       if (expense.type === 'product') {
         return sum + (expense.totalAmount || 0);
       } else {
@@ -426,14 +618,14 @@ const useExpensesController = () => {
     }, 0);
     
     const totalProductsSold = expenses
-      .filter((e: Expense) => e.type === 'product')
-      .reduce((sum: number, expense: Expense) => sum + (expense.quantitySold || 0), 0);
+      .filter((e: ControllerExpense) => e.type === 'product')
+      .reduce((sum: number, expense: ControllerExpense) => sum + (expense.quantitySold || 0), 0);
     
     // Estadísticas del mes actual
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
-    const thisMonthExpenses = expenses.filter((expense: Expense) => {
+    const thisMonthExpenses = expenses.filter((expense: ControllerExpense) => {
       const expenseDate = expense.date
         ? new Date(expense.date.seconds ? expense.date.seconds * 1000 : expense.date)
         : null;
@@ -442,7 +634,7 @@ const useExpensesController = () => {
              expenseDate.getFullYear() === currentYear;
     });
     
-    const thisMonthAmount = thisMonthExpenses.reduce((sum: number, expense: Expense) => {
+    const thisMonthAmount = thisMonthExpenses.reduce((sum: number, expense: ControllerExpense) => {
       if (expense.type === 'product') {
         return sum + (expense.totalAmount || 0);
       } else {
@@ -462,16 +654,16 @@ const useExpensesController = () => {
   }, [expenses]);
 
   // Opciones para filtros
-  const filterOptions = {
+  const filterOptions: FilterOptions = {
     types: [
       { value: 'all', label: 'Todos los tipos' },
       { value: 'product', label: 'Ventas de productos' },
       { value: 'misc', label: 'Gastos varios' }
-    ] as FilterSelectOption[],
+    ],
     categories: [
       { value: 'all', label: 'Todas las categorías' },
       ...getUniqueCategories().map(cat => ({ value: cat, label: cat }))
-    ] as FilterSelectOption[],
+    ],
     dateRange: {
       start: null,
       end: null

@@ -1,13 +1,111 @@
-// src/controllers/TransfersController.js - Controlador para transferencias con logging de actividades
+// src/controllers/TransfersController.tsx - Controlador para transferencias con logging de actividades
 import { useState, useEffect, useCallback } from 'react';
 import { useTransfers } from '../contexts/TransferContext';
 import { useStock } from '../contexts/StockContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useActivityLogger } from '../hooks/useActivityLogger'; // NUEVO: Hook para logging
+import { useActivityLogger } from '../hooks/useActivityLogger';
 
-const useTransfersController = () => {
+// Interfaces para TypeScript - Redefinidas para evitar conflictos
+interface ControllerProduct {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice?: number;
+  unit?: string;
+  category?: string;
+  [key: string]: any;
+}
+
+interface ControllerWarehouse {
+  id: string;
+  name: string;
+  type?: string;
+  capacity?: number;
+  location?: string;
+  [key: string]: any;
+}
+
+interface ControllerTransfer {
+  id: string;
+  transferNumber: string;
+  requestDate: any; // Firebase Timestamp
+  status: 'pending' | 'approved' | 'rejected' | 'shipped' | 'completed' | 'cancelled';
+  sourceWarehouse: ControllerWarehouse;
+  targetWarehouse: ControllerWarehouse;
+  products: ControllerProduct[];
+  requestedBy: string;
+  approvedBy?: string;
+  rejectedBy?: string;
+  rejectionReason?: string;
+  shippedBy?: string;
+  shippedDate?: any;
+  receivedBy?: string;
+  receivedDate?: any;
+  transferCost?: number;
+  distance?: number;
+  notes?: string;
+  createdAt?: any;
+  updatedAt?: any;
+  [key: string]: any;
+}
+
+interface Filters {
+  status: string;
+  sourceWarehouse: string;
+  targetWarehouse: string;
+  dateRange: { start: Date | null; end: Date | null };
+  searchTerm: string;
+}
+
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
+interface FilterOptions {
+  status: FilterOption[];
+  dateRange: {
+    start: Date | null;
+    end: Date | null;
+  };
+}
+
+interface User {
+  displayName?: string;
+  email?: string;
+}
+
+type DialogType = 'add-transfer' | 'edit-transfer' | 'view-transfer' | 'approve-transfer' | 'receive-transfer' | '';
+
+interface UseTransfersControllerReturn {
+  transfers: ControllerTransfer[];
+  warehouses: ControllerWarehouse[];
+  products: ControllerProduct[];
+  loading: boolean;
+  error: string;
+  selectedTransfer: ControllerTransfer | null;
+  dialogOpen: boolean;
+  dialogType: DialogType;
+  filterOptions: FilterOptions;
+  handleAddTransfer: () => void;
+  handleEditTransfer: (transfer: ControllerTransfer) => void;
+  handleViewTransfer: (transfer: ControllerTransfer) => void;
+  handleApproveTransfer: (transfer: ControllerTransfer) => void;
+  handleReceiveTransfer: (transfer: ControllerTransfer) => void;
+  handleDeleteTransfer: (transferId: string) => Promise<void>;
+  handleSaveTransfer: (transferData: Partial<ControllerTransfer>) => Promise<boolean>;
+  handleApproveTransferSubmit: (decision: string, reason?: string) => Promise<boolean>;
+  handleShipTransfer: (transferId: string) => Promise<void>;
+  handleReceiveTransferSubmit: (receivedData: any) => Promise<boolean>;
+  handleFilterChange: (filterName: string, value: any) => void;
+  handleSearch: (searchTerm: string) => void;
+  handleCloseDialog: () => void;
+  refreshData: () => Promise<void>;
+}
+
+const useTransfersController = (): UseTransfersControllerReturn => {
   const {
-    transfers,
+    transfers: stockTransfers,
     loading: transfersLoading,
     error: transfersError,
     loadTransfers,
@@ -21,8 +119,8 @@ const useTransfersController = () => {
   } = useTransfers();
   
   const {
-    warehouses = [],
-    products = [],
+    warehouses: stockWarehouses = [],
+    products: stockProducts = [],
     loading: stockLoading,
     error: stockError,
     loadWarehouses,
@@ -30,25 +128,86 @@ const useTransfersController = () => {
   } = useStock();
 
   const { currentUser } = useAuth();
-  const { logTransfer } = useActivityLogger(); // NUEVO: Hook de logging
+  const { logTransfer } = useActivityLogger();
+
+  // Convertir transferencias del contexto a nuestro tipo local
+  const transfers: ControllerTransfer[] = stockTransfers.map(transfer => {
+    const transferAny = transfer as any;
+    
+    const baseTransfer: ControllerTransfer = {
+      id: transferAny.id || '',
+      transferNumber: transferAny.transferNumber || '',
+      requestDate: transferAny.requestDate,
+      status: transferAny.status || 'pending',
+      sourceWarehouse: transferAny.sourceWarehouse || { id: '', name: '' },
+      targetWarehouse: transferAny.targetWarehouse || { id: '', name: '' },
+      products: transferAny.products || [],
+      requestedBy: transferAny.requestedBy || '',
+      approvedBy: transferAny.approvedBy,
+      rejectedBy: transferAny.rejectedBy,
+      rejectionReason: transferAny.rejectionReason,
+      shippedBy: transferAny.shippedBy,
+      shippedDate: transferAny.shippedDate,
+      receivedBy: transferAny.receivedBy,
+      receivedDate: transferAny.receivedDate,
+      transferCost: transferAny.transferCost,
+      distance: transferAny.distance,
+      notes: transferAny.notes,
+      createdAt: transferAny.createdAt,
+      updatedAt: transferAny.updatedAt
+    };
+    
+    return baseTransfer;
+  });
+
+  // Convertir almacenes del contexto a nuestro tipo local
+  const warehouses: ControllerWarehouse[] = stockWarehouses.map(warehouse => {
+    const warehouseAny = warehouse as any;
+    
+    const baseWarehouse: ControllerWarehouse = {
+      id: warehouseAny.id || '',
+      name: warehouseAny.name || '',
+      type: warehouseAny.type,
+      capacity: warehouseAny.capacity,
+      location: warehouseAny.location
+    };
+    
+    return baseWarehouse;
+  });
+
+  // Convertir productos del contexto a nuestro tipo local
+  const products: ControllerProduct[] = stockProducts.map(product => {
+    const productAny = product as any;
+    
+    const baseProduct: ControllerProduct = {
+      id: productAny.id || '',
+      name: productAny.name || '',
+      quantity: productAny.quantity || 0,
+      unitPrice: productAny.unitPrice,
+      unit: productAny.unit,
+      category: productAny.category
+    };
+    
+    return baseProduct;
+  });
 
   // Estados locales
-  const [selectedTransfer, setSelectedTransfer] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState(''); // 'add-transfer', 'edit-transfer', 'view-transfer', 'approve-transfer', 'receive-transfer'
-  const [filters, setFilters] = useState({
+  const [selectedTransfer, setSelectedTransfer] = useState<ControllerTransfer | null>(null);
+  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<DialogType>('');
+  const [filters, setFilters] = useState<Filters>({
     status: 'all',
     sourceWarehouse: 'all',
     targetWarehouse: 'all',
     dateRange: { start: null, end: null },
     searchTerm: ''
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filteredTransfersList, setFilteredTransfersList] = useState([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+  const [filteredTransfersList, setFilteredTransfersList] = useState<ControllerTransfer[]>([]);
 
   // Cargar datos necesarios
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (): Promise<void> => {
     try {
       setError('');
       
@@ -58,7 +217,8 @@ const useTransfersController = () => {
         products.length === 0 ? loadProducts() : Promise.resolve(),
         loadTransfers()
       ]);
-    } catch (err) {
+      
+    } catch (err: any) {
       console.error('Error al cargar datos:', err);
       setError('Error al cargar datos: ' + err.message);
     }
@@ -85,44 +245,26 @@ const useTransfersController = () => {
   }, [loadData]);
 
   // Filtrar transferencias según filtros aplicados
-  const getFilteredTransfers = useCallback(() => {
+  const getFilteredTransfers = useCallback((): ControllerTransfer[] => {
     if (!Array.isArray(transfers) || transfers.length === 0) return [];
     
-    // Hacer una copia del array para no modificar el original
-    const transfersWithWarehouseRefs = transfers.map(transfer => {
-      // Si la transferencia ya tiene referencias completas a los almacenes, usarlas
-      if (transfer.sourceWarehouse && typeof transfer.sourceWarehouse === 'object' && transfer.sourceWarehouse.name) {
-        return transfer;
-      }
-      
-      // Si no, buscar los almacenes por ID
-      const sourceWarehouse = Array.isArray(warehouses) ? warehouses.find(w => w.id === transfer.sourceWarehouseId) : null;
-      const targetWarehouse = Array.isArray(warehouses) ? warehouses.find(w => w.id === transfer.targetWarehouseId) : null;
-      
-      return {
-        ...transfer,
-        sourceWarehouse: sourceWarehouse ? { id: sourceWarehouse.id, name: sourceWarehouse.name } : { id: transfer.sourceWarehouseId || '', name: 'Almacén desconocido' },
-        targetWarehouse: targetWarehouse ? { id: targetWarehouse.id, name: targetWarehouse.name } : { id: transfer.targetWarehouseId || '', name: 'Almacén desconocido' }
-      };
-    });
-    
-    return transfersWithWarehouseRefs.filter(transfer => {
+    return transfers.filter((transfer: ControllerTransfer) => {
       // Filtro por estado
       if (filters.status !== 'all' && transfer.status !== filters.status) {
         return false;
       }
       
       // Filtro por almacén origen
-      if (filters.sourceWarehouse !== 'all' && transfer.sourceWarehouseId !== filters.sourceWarehouse) {
+      if (filters.sourceWarehouse !== 'all' && transfer.sourceWarehouse.id !== filters.sourceWarehouse) {
         return false;
       }
       
       // Filtro por almacén destino
-      if (filters.targetWarehouse !== 'all' && transfer.targetWarehouseId !== filters.targetWarehouse) {
+      if (filters.targetWarehouse !== 'all' && transfer.targetWarehouse.id !== filters.targetWarehouse) {
         return false;
       }
       
-      // Filtro por fecha
+      // Filtro por rango de fechas
       if (filters.dateRange.start || filters.dateRange.end) {
         const requestDate = transfer.requestDate 
           ? new Date(transfer.requestDate.seconds ? transfer.requestDate.seconds * 1000 : transfer.requestDate)
@@ -145,64 +287,72 @@ const useTransfersController = () => {
       // Búsqueda por texto
       if (filters.searchTerm) {
         const term = filters.searchTerm.toLowerCase();
-        return (
-          (transfer.transferNumber && transfer.transferNumber.toLowerCase().includes(term)) ||
-          (transfer.requestedBy && transfer.requestedBy.toLowerCase().includes(term)) ||
-          (transfer.sourceWarehouse.name && transfer.sourceWarehouse.name.toLowerCase().includes(term)) ||
-          (transfer.targetWarehouse.name && transfer.targetWarehouse.name.toLowerCase().includes(term))
+        const searchableFields = [
+          transfer.transferNumber,
+          transfer.requestedBy,
+          transfer.sourceWarehouse.name,
+          transfer.targetWarehouse.name
+        ].filter(Boolean);
+        
+        const matchesSearch = searchableFields.some(field => 
+          field && field.toString().toLowerCase().includes(term)
         );
+        
+        if (!matchesSearch) return false;
       }
       
       return true;
     });
-  }, [transfers, warehouses, filters]);
+  }, [transfers, filters]);
 
-  // Actualizar transferencias filtradas cuando cambian los filtros, transferencias o almacenes
+  // Actualizar transferencias filtradas cuando cambien los filtros o transferencias
   useEffect(() => {
     setFilteredTransfersList(getFilteredTransfers());
   }, [getFilteredTransfers]);
 
   // Abrir diálogo para añadir transferencia
-  const handleAddTransfer = useCallback(() => {
+  const handleAddTransfer = useCallback((): void => {
     setSelectedTransfer(null);
     setDialogType('add-transfer');
     setDialogOpen(true);
   }, []);
 
   // Abrir diálogo para editar transferencia
-  const handleEditTransfer = useCallback((transfer) => {
+  const handleEditTransfer = useCallback((transfer: ControllerTransfer): void => {
     setSelectedTransfer(transfer);
     setDialogType('edit-transfer');
     setDialogOpen(true);
   }, []);
 
   // Abrir diálogo para ver detalles de transferencia
-  const handleViewTransfer = useCallback((transfer) => {
+  const handleViewTransfer = useCallback((transfer: ControllerTransfer): void => {
     setSelectedTransfer(transfer);
     setDialogType('view-transfer');
     setDialogOpen(true);
   }, []);
 
   // Abrir diálogo para aprobar/rechazar transferencia
-  const handleApproveTransfer = useCallback((transfer) => {
+  const handleApproveTransfer = useCallback((transfer: ControllerTransfer): void => {
     setSelectedTransfer(transfer);
     setDialogType('approve-transfer');
     setDialogOpen(true);
   }, []);
 
   // Abrir diálogo para recibir transferencia
-  const handleReceiveTransfer = useCallback((transfer) => {
+  const handleReceiveTransfer = useCallback((transfer: ControllerTransfer): void => {
     setSelectedTransfer(transfer);
     setDialogType('receive-transfer');
     setDialogOpen(true);
   }, []);
 
   // MODIFICADO: Confirmar eliminación de transferencia con logging
-  const handleDeleteTransfer = useCallback(async (transferId) => {
+  const handleDeleteTransfer = useCallback(async (transferId: string): Promise<void> => {
     if (window.confirm('¿Estás seguro de que deseas eliminar esta transferencia? Esta acción no se puede deshacer.')) {
       try {
+        setError('');
+        
         // Obtener datos de la transferencia antes de eliminarla
-        const transferToDelete = transfers.find(t => t.id === transferId);
+        const transferToDelete = transfers.find((t: ControllerTransfer) => t.id === transferId);
         
         await deleteTransfer(transferId);
         
@@ -216,7 +366,8 @@ const useTransfersController = () => {
           }, {
             productsCount: transferToDelete.products?.length || 0,
             status: transferToDelete.status,
-            requestedBy: transferToDelete.requestedBy
+            requestedBy: transferToDelete.requestedBy,
+            deletedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
           });
         }
         
@@ -224,23 +375,28 @@ const useTransfersController = () => {
         if (selectedTransfer && selectedTransfer.id === transferId) {
           setDialogOpen(false);
         }
-      } catch (err) {
+        
+        // Recargar datos
+        await loadData();
+      } catch (err: any) {
         console.error('Error al eliminar transferencia:', err);
         setError('Error al eliminar transferencia: ' + err.message);
       }
     }
-  }, [deleteTransfer, selectedTransfer, transfers, logTransfer]);
+  }, [deleteTransfer, selectedTransfer, transfers, logTransfer, currentUser, loadData]);
 
   // MODIFICADO: Guardar transferencia con logging
-  const handleSaveTransfer = useCallback(async (transferData) => {
+  const handleSaveTransfer = useCallback(async (transferData: Partial<ControllerTransfer>): Promise<boolean> => {
     try {
+      setError('');
+      
       // Añadir información del usuario actual
-      const dataWithUser = {
+      const dataWithUser: any = {
         ...transferData,
         requestedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
       };
 
-      let transferId;
+      let transferId: string;
       
       if (dialogType === 'add-transfer') {
         // Crear nueva transferencia
@@ -277,21 +433,24 @@ const useTransfersController = () => {
         });
       }
       
+      // Cerrar diálogo y recargar datos
       setDialogOpen(false);
-      await loadTransfers();
+      setSelectedTransfer(null);
+      await loadData();
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al guardar transferencia:', err);
       setError('Error al guardar transferencia: ' + err.message);
       throw err;
     }
-  }, [dialogType, selectedTransfer, addTransfer, updateTransfer, loadTransfers, currentUser, logTransfer]);
+  }, [dialogType, selectedTransfer, addTransfer, updateTransfer, currentUser, logTransfer, loadData]);
 
   // MODIFICADO: Aprobar transferencia con logging
-  const handleApproveTransferSubmit = useCallback(async (decision, reason = '') => {
+  const handleApproveTransferSubmit = useCallback(async (decision: string, reason: string = ''): Promise<boolean> => {
     try {
-      if (!selectedTransfer) return;
+      if (!selectedTransfer) return false;
       
+      setError('');
       const approverName = currentUser?.displayName || currentUser?.email || 'Usuario desconocido';
       
       if (decision === 'approve') {
@@ -325,22 +484,27 @@ const useTransfersController = () => {
         });
       }
       
+      // Cerrar diálogo y recargar datos
       setDialogOpen(false);
-      await loadTransfers();
+      setSelectedTransfer(null);
+      await loadData();
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al procesar aprobación:', err);
       setError('Error al procesar aprobación: ' + err.message);
       throw err;
     }
-  }, [selectedTransfer, approveTransfer, rejectTransfer, loadTransfers, currentUser, logTransfer]);
+  }, [selectedTransfer, approveTransfer, rejectTransfer, currentUser, logTransfer, loadData]);
 
   // MODIFICADO: Enviar transferencia con logging
-  const handleShipTransfer = useCallback(async (transferId) => {
+  const handleShipTransfer = useCallback(async (transferId: string): Promise<void> => {
     if (window.confirm('¿Confirmas que deseas enviar esta transferencia? Esto descontará el stock del almacén origen.')) {
       try {
+        setError('');
+        
+        // Obtener datos de la transferencia antes de enviar
+        const transferToShip = transfers.find((t: ControllerTransfer) => t.id === transferId);
         const shipperName = currentUser?.displayName || currentUser?.email || 'Usuario desconocido';
-        const transferToShip = transfers.find(t => t.id === transferId);
         
         await shipTransfer(transferId, shipperName);
         
@@ -354,25 +518,34 @@ const useTransfersController = () => {
           }, {
             shippedBy: shipperName,
             productsCount: transferToShip.products?.length || 0,
-            stockDeducted: true,
-            totalProducts: transferToShip.products?.reduce((sum, p) => sum + (p.quantity || 0), 0) || 0
+            transferCost: transferToShip.transferCost || 0
           });
         }
-      } catch (err) {
+        
+        await loadData();
+      } catch (err: any) {
         console.error('Error al enviar transferencia:', err);
         setError('Error al enviar transferencia: ' + err.message);
       }
     }
-  }, [shipTransfer, currentUser, transfers, logTransfer]);
+  }, [transfers, shipTransfer, currentUser, logTransfer, loadData]);
 
   // MODIFICADO: Recibir transferencia con logging
-  const handleReceiveTransferSubmit = useCallback(async (receivedProducts) => {
+  const handleReceiveTransferSubmit = useCallback(async (receivedData: any): Promise<boolean> => {
     try {
-      if (!selectedTransfer) return;
+      if (!selectedTransfer) return false;
+      
+      setError('');
       
       const receiverName = currentUser?.displayName || currentUser?.email || 'Usuario desconocido';
       
-      await receiveTransfer(selectedTransfer.id, receiverName, receivedProducts);
+      // Convertir datos para el contexto
+      const contextReceivedData: any = {
+        ...receivedData,
+        receivedBy: receiverName
+      };
+      
+      await receiveTransfer(selectedTransfer.id, contextReceivedData);
       
       // NUEVO: Registrar actividad de recepción
       await logTransfer('receive', {
@@ -382,24 +555,26 @@ const useTransfersController = () => {
         targetWarehouse: selectedTransfer.targetWarehouse?.name || 'Almacén desconocido'
       }, {
         receivedBy: receiverName,
-        productsReceived: receivedProducts?.length || selectedTransfer.products?.length || 0,
-        totalQuantityReceived: receivedProducts?.reduce((sum, p) => sum + (p.quantityReceived || p.quantity || 0), 0) || 0,
-        stockAdded: true,
-        transferCompleted: true
+        productsCount: selectedTransfer.products?.length || 0,
+        receivedProductsCount: receivedData.products?.length || 0,
+        notes: receivedData.notes,
+        quality: receivedData.quality
       });
       
+      // Cerrar diálogo y recargar datos
       setDialogOpen(false);
-      await loadTransfers();
+      setSelectedTransfer(null);
+      await loadData();
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al recibir transferencia:', err);
       setError('Error al recibir transferencia: ' + err.message);
       throw err;
     }
-  }, [selectedTransfer, receiveTransfer, loadTransfers, currentUser, logTransfer]);
+  }, [selectedTransfer, receiveTransfer, currentUser, logTransfer, loadData]);
 
   // Cambiar filtros
-  const handleFilterChange = useCallback((filterName, value) => {
+  const handleFilterChange = useCallback((filterName: string, value: any): void => {
     setFilters(prev => ({
       ...prev,
       [filterName]: value
@@ -407,7 +582,7 @@ const useTransfersController = () => {
   }, []);
 
   // Buscar por texto
-  const handleSearch = useCallback((searchTerm) => {
+  const handleSearch = useCallback((searchTerm: string): void => {
     setFilters(prev => ({
       ...prev,
       searchTerm
@@ -415,13 +590,13 @@ const useTransfersController = () => {
   }, []);
 
   // Cerrar diálogo
-  const handleCloseDialog = useCallback(() => {
+  const handleCloseDialog = useCallback((): void => {
     setDialogOpen(false);
     setSelectedTransfer(null);
   }, []);
 
   // Opciones para filtros
-  const filterOptions = {
+  const filterOptions: FilterOptions = {
     status: [
       { value: 'all', label: 'Todos los estados' },
       { value: 'pending', label: 'Pendiente' },
@@ -439,8 +614,8 @@ const useTransfersController = () => {
 
   return {
     transfers: filteredTransfersList,
-    warehouses: Array.isArray(warehouses) ? warehouses : [],
-    products: Array.isArray(products) ? products : [],
+    warehouses,
+    products,
     loading,
     error,
     selectedTransfer,

@@ -1,15 +1,97 @@
-// src/controllers/WarehousesController.js - Controlador para almacenes con logging de actividades
+// src/controllers/WarehousesController.tsx - Controlador para almacenes con logging de actividades
 import { useState, useEffect, useCallback } from 'react';
 import { useStock } from '../contexts/StockContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useActivityLogger } from '../hooks/useActivityLogger'; // NUEVO: Hook para logging
+import { useActivityLogger } from '../hooks/useActivityLogger';
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../api/firebase';
 
-const useWarehousesController = () => {
+// Interfaces para TypeScript - Redefinidas para evitar conflictos
+interface ControllerWarehouse {
+  id: string;
+  name: string;
+  type: 'silo' | 'shed' | 'barn' | 'cellar' | 'coldroom' | 'outdoor' | 'other';
+  status: 'active' | 'inactive' | 'maintenance' | 'full';
+  capacity: number;
+  capacityUnit: 'ton' | 'kg' | 'm3' | 'l';
+  location?: string;
+  fieldId?: string;
+  description?: string;
+  storageCondition?: string;
+  temperature?: number;
+  humidity?: number;
+  supervisor?: string;
+  isFieldLevel?: boolean;
+  createdBy?: string;
+  createdAt?: any; // Firebase Timestamp
+  updatedAt?: any; // Firebase Timestamp
+  [key: string]: any;
+}
+
+interface ControllerField {
+  id: string;
+  name: string;
+  location?: string;
+  [key: string]: any;
+}
+
+interface Filters {
+  status: string;
+  type: string;
+  fieldId: string;
+  searchTerm: string;
+}
+
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
+interface FilterOptions {
+  status: FilterOption[];
+  warehouseTypes: FilterOption[];
+}
+
+interface WarehouseChange {
+  field: string;
+  label: string;
+  oldValue: string;
+  newValue: string;
+  type?: string;
+}
+
+interface User {
+  displayName?: string;
+  email?: string;
+}
+
+type DialogType = 'add-warehouse' | 'edit-warehouse' | 'view-warehouse' | '';
+
+interface UseWarehousesControllerReturn {
+  warehouses: ControllerWarehouse[];
+  fields: ControllerField[];
+  loading: boolean;
+  error: string;
+  selectedWarehouse: ControllerWarehouse | null;
+  dialogOpen: boolean;
+  dialogType: DialogType;
+  filterOptions: FilterOptions;
+  handleAddWarehouse: () => void;
+  handleEditWarehouse: (warehouse: ControllerWarehouse) => void;
+  handleViewWarehouse: (warehouse: ControllerWarehouse) => void;
+  handleDeleteWarehouse: (warehouseId: string) => Promise<void>;
+  handleSaveWarehouse: (warehouseData: Partial<ControllerWarehouse>) => Promise<boolean>;
+  handleFilterChange: (filterName: string, value: string) => void;
+  handleSearch: (searchTerm: string) => void;
+  handleCloseDialog: () => void;
+  handleToggleWarehouseStatus: (warehouseId: string, newStatus: string) => Promise<void>;
+  refreshData: () => Promise<void>;
+}
+
+const useWarehousesController = (): UseWarehousesControllerReturn => {
   const {
-    warehouses,
-    fields,
+    warehouses: stockWarehouses,
+    fields: stockFields,
     loading: stockLoading,
     error: stockError,
     loadWarehouses,
@@ -17,24 +99,64 @@ const useWarehousesController = () => {
   } = useStock();
 
   const { currentUser } = useAuth();
-  const { logWarehouse } = useActivityLogger(); // NUEVO: Hook de logging
+  const { logWarehouse } = useActivityLogger();
+
+  // Convertir almacenes del contexto a nuestro tipo local
+  const warehouses: ControllerWarehouse[] = stockWarehouses.map(warehouse => {
+    const warehouseAny = warehouse as any;
+    
+    const baseWarehouse: ControllerWarehouse = {
+      id: warehouseAny.id || '',
+      name: warehouseAny.name || '',
+      type: warehouseAny.type || 'other',
+      status: warehouseAny.status || 'active',
+      capacity: warehouseAny.capacity || 0,
+      capacityUnit: warehouseAny.capacityUnit || 'ton',
+      location: warehouseAny.location,
+      fieldId: warehouseAny.fieldId,
+      description: warehouseAny.description,
+      storageCondition: warehouseAny.storageCondition,
+      temperature: warehouseAny.temperature,
+      humidity: warehouseAny.humidity,
+      supervisor: warehouseAny.supervisor,
+      isFieldLevel: warehouseAny.isFieldLevel,
+      createdBy: warehouseAny.createdBy,
+      createdAt: warehouseAny.createdAt,
+      updatedAt: warehouseAny.updatedAt
+    };
+    
+    return baseWarehouse;
+  });
+
+  // Convertir campos del contexto a nuestro tipo local
+  const fields: ControllerField[] = stockFields.map(field => {
+    const fieldAny = field as any;
+    
+    const baseField: ControllerField = {
+      id: fieldAny.id || '',
+      name: fieldAny.name || '',
+      location: fieldAny.location
+    };
+    
+    return baseField;
+  });
 
   // Estados locales
-  const [selectedWarehouse, setSelectedWarehouse] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState(''); // 'add-warehouse', 'edit-warehouse', 'view-warehouse'
-  const [filters, setFilters] = useState({
+  const [selectedWarehouse, setSelectedWarehouse] = useState<ControllerWarehouse | null>(null);
+  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<DialogType>('');
+  const [filters, setFilters] = useState<Filters>({
     status: 'all',
     type: 'all',
     fieldId: 'all',
     searchTerm: ''
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filteredWarehousesList, setFilteredWarehousesList] = useState([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+  const [filteredWarehousesList, setFilteredWarehousesList] = useState<ControllerWarehouse[]>([]);
 
   // MODIFICADO: Función para añadir un almacén con logging
-  const addWarehouse = useCallback(async (warehouseData) => {
+  const addWarehouse = useCallback(async (warehouseData: Partial<ControllerWarehouse>): Promise<string> => {
     try {
       // Añadir documento a la colección 'warehouses'
       const warehouseRef = await addDoc(collection(db, 'warehouses'), {
@@ -44,12 +166,12 @@ const useWarehousesController = () => {
       });
       
       // NUEVO: Registrar actividad de creación
-      const fieldName = fields.find(f => f.id === warehouseData.fieldId)?.name || null;
+      const fieldName = fields.find((f: ControllerField) => f.id === warehouseData.fieldId)?.name || null;
       
       await logWarehouse('create', {
         id: warehouseRef.id,
-        name: warehouseData.name,
-        type: warehouseData.type
+        name: warehouseData.name || '',
+        type: warehouseData.type || 'other'
       }, {
         capacity: warehouseData.capacity || 0,
         capacityUnit: warehouseData.capacityUnit || 'ton',
@@ -69,93 +191,35 @@ const useWarehousesController = () => {
       await loadWarehouses();
       
       return warehouseRef.id;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al añadir almacén:', error);
       setError('Error al añadir almacén: ' + error.message);
       throw error;
     }
   }, [loadWarehouses, logWarehouse, fields, currentUser]);
 
-  // MODIFICADO: Función para actualizar un almacén con logging
-  const updateWarehouse = useCallback(async (warehouseId, warehouseData) => {
-    try {
-      // Obtener datos actuales para comparar cambios
-      const currentWarehouse = warehouses.find(w => w.id === warehouseId);
-      
-      // Actualizar el documento en la colección 'warehouses'
-      await updateDoc(doc(db, 'warehouses', warehouseId), {
-        ...warehouseData,
-        updatedAt: serverTimestamp()
-      });
-      
-      // NUEVO: Detectar y registrar cambios
-      if (currentWarehouse) {
-        const changes = detectWarehouseChanges(currentWarehouse, warehouseData);
-        const fieldName = fields.find(f => f.id === warehouseData.fieldId)?.name || null;
-        
-        await logWarehouse('update', {
-          id: warehouseId,
-          name: warehouseData.name,
-          type: warehouseData.type
-        }, {
-          changes: changes,
-          changesCount: changes.length,
-          changesSummary: generateChangesSummary(changes),
-          capacity: warehouseData.capacity || 0,
-          capacityUnit: warehouseData.capacityUnit || 'ton',
-          location: warehouseData.location,
-          field: fieldName,
-          fieldId: warehouseData.fieldId,
-          previousStatus: currentWarehouse.status,
-          newStatus: warehouseData.status,
-          updatedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
-        });
-      } else {
-        // Si no se encuentran los datos actuales, registrar actualización simple
-        await logWarehouse('update', {
-          id: warehouseId,
-          name: warehouseData.name,
-          type: warehouseData.type
-        }, {
-          updatedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
-        });
-      }
-      
-      // Recargar almacenes
-      await loadWarehouses();
-      
-      return warehouseId;
-    } catch (error) {
-      console.error(`Error al actualizar almacén ${warehouseId}:`, error);
-      setError('Error al actualizar almacén: ' + error.message);
-      throw error;
-    }
-  }, [loadWarehouses, logWarehouse, warehouses, fields, currentUser]);
-
-  // NUEVO: Función para detectar cambios entre almacén actual y nuevos datos
-  const detectWarehouseChanges = (currentWarehouse, newData) => {
-    const changes = [];
+  // NUEVO: Función para detectar cambios en almacenes
+  const detectWarehouseChanges = useCallback((oldWarehouse: ControllerWarehouse, newWarehouse: Partial<ControllerWarehouse>): WarehouseChange[] => {
+    const changes: WarehouseChange[] = [];
     
-    // Campos a monitorear con sus nombres legibles
-    const fieldsToMonitor = {
+    const fieldsToMonitor: Record<string, string> = {
       name: 'Nombre',
       type: 'Tipo',
-      status: 'Estado',
       capacity: 'Capacidad',
+      capacityUnit: 'Unidad de capacidad',
       location: 'Ubicación',
-      fieldId: 'Campo asignado',
-      storageCondition: 'Condición de almacenamiento',
+      description: 'Descripción',
+      storageCondition: 'Condiciones de almacenamiento',
       temperature: 'Temperatura',
       humidity: 'Humedad',
-      supervisor: 'Responsable',
-      isFieldLevel: 'Nivel de asignación'
+      supervisor: 'Supervisor',
+      status: 'Estado'
     };
     
     for (const [field, label] of Object.entries(fieldsToMonitor)) {
-      const oldValue = currentWarehouse[field];
-      const newValue = newData[field];
+      const oldValue = (oldWarehouse as any)[field];
+      const newValue = (newWarehouse as any)[field];
       
-      // Comparar valores (considerar null y undefined como equivalentes)
       if (oldValue !== newValue && !(oldValue == null && newValue == null)) {
         changes.push({
           field,
@@ -167,25 +231,43 @@ const useWarehousesController = () => {
       }
     }
     
+    // Cambios en campo
+    if (oldWarehouse.fieldId !== newWarehouse.fieldId) {
+      const oldField = fields.find((f: ControllerField) => f.id === oldWarehouse.fieldId)?.name || 'Sin campo';
+      const newField = fields.find((f: ControllerField) => f.id === newWarehouse.fieldId)?.name || 'Sin campo';
+      changes.push({
+        field: 'fieldId',
+        label: 'Campo',
+        oldValue: oldField,
+        newValue: newField,
+        type: 'location'
+      });
+    }
+    
     return changes;
-  };
+  }, [fields]);
 
   // NUEVO: Función para formatear valores según el tipo de campo
-  const formatWarehouseValue = (value, field) => {
+  const formatWarehouseValue = (value: any, field: string): string => {
     if (value == null) return 'Sin definir';
     
     switch (field) {
       case 'capacity':
-        return `${value} ton`;
+        return `${value} unidades`;
       case 'temperature':
         return `${value}°C`;
       case 'humidity':
         return `${value}%`;
-      case 'fieldId':
-        const field_obj = fields.find(f => f.id === value);
-        return field_obj ? field_obj.name : 'Campo desconocido';
+      case 'status':
+        const statusMap: Record<string, string> = {
+          'active': 'Activo',
+          'inactive': 'Inactivo',
+          'maintenance': 'En mantenimiento',
+          'full': 'Lleno'
+        };
+        return statusMap[value] || value;
       case 'type':
-        const typeLabels = {
+        const typeMap: Record<string, string> = {
           'silo': 'Silo',
           'shed': 'Galpón',
           'barn': 'Granero',
@@ -194,23 +276,7 @@ const useWarehousesController = () => {
           'outdoor': 'Almacenamiento exterior',
           'other': 'Otro'
         };
-        return typeLabels[value] || value;
-      case 'status':
-        const statusLabels = {
-          'active': 'Activo',
-          'inactive': 'Inactivo',
-          'maintenance': 'En mantenimiento',
-          'full': 'Lleno'
-        };
-        return statusLabels[value] || value;
-      case 'storageCondition':
-        const conditionLabels = {
-          'normal': 'Ambiente normal',
-          'refrigerated': 'Refrigerado',
-          'controlled_atmosphere': 'Atmósfera controlada',
-          'ventilated': 'Ventilado'
-        };
-        return conditionLabels[value] || value;
+        return typeMap[value] || value;
       case 'isFieldLevel':
         return value ? 'Campo completo' : 'Lote específico';
       default:
@@ -219,7 +285,7 @@ const useWarehousesController = () => {
   };
 
   // NUEVO: Función para determinar el tipo de cambio
-  const getWarehouseChangeType = (field, oldValue, newValue) => {
+  const getWarehouseChangeType = (field: string, oldValue: any, newValue: any): string => {
     switch (field) {
       case 'capacity':
         const oldCapacity = Number(oldValue) || 0;
@@ -239,8 +305,8 @@ const useWarehousesController = () => {
   };
 
   // NUEVO: Función para generar resumen de cambios
-  const generateChangesSummary = (changes) => {
-    const summaryParts = [];
+  const generateChangesSummary = (changes: WarehouseChange[]): string => {
+    const summaryParts: string[] = [];
     
     changes.forEach(change => {
       switch (change.type) {
@@ -267,18 +333,65 @@ const useWarehousesController = () => {
     return summaryParts.join(', ');
   };
 
+  // MODIFICADO: Función para actualizar un almacén con logging
+  const updateWarehouse = useCallback(async (warehouseId: string, warehouseData: Partial<ControllerWarehouse>): Promise<string> => {
+    try {
+      // Obtener datos actuales para comparar cambios
+      const currentWarehouse = warehouses.find((w: ControllerWarehouse) => w.id === warehouseId);
+      
+      // Actualizar el documento en la colección 'warehouses'
+      await updateDoc(doc(db, 'warehouses', warehouseId), {
+        ...warehouseData,
+        updatedAt: serverTimestamp()
+      });
+      
+      // NUEVO: Detectar y registrar cambios
+      if (currentWarehouse) {
+        const changes = detectWarehouseChanges(currentWarehouse, warehouseData);
+        const fieldName = fields.find((f: ControllerField) => f.id === warehouseData.fieldId)?.name || null;
+        
+        await logWarehouse('update', {
+          id: warehouseId,
+          name: warehouseData.name || currentWarehouse.name,
+          type: warehouseData.type || currentWarehouse.type
+        }, {
+          changes: changes,
+          changesCount: changes.length,
+          changesSummary: generateChangesSummary(changes),
+          capacity: warehouseData.capacity || currentWarehouse.capacity,
+          capacityUnit: warehouseData.capacityUnit || currentWarehouse.capacityUnit,
+          location: warehouseData.location || currentWarehouse.location,
+          field: fieldName,
+          fieldId: warehouseData.fieldId || currentWarehouse.fieldId,
+          storageCondition: warehouseData.storageCondition || currentWarehouse.storageCondition,
+          status: warehouseData.status || currentWarehouse.status,
+          updatedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
+        });
+      }
+      
+      // Recargar almacenes
+      await loadWarehouses();
+      
+      return warehouseId;
+    } catch (error: any) {
+      console.error(`Error al actualizar almacén ${warehouseId}:`, error);
+      setError('Error al actualizar almacén: ' + error.message);
+      throw error;
+    }
+  }, [warehouses, loadWarehouses, logWarehouse, fields, currentUser, detectWarehouseChanges]);
+
   // MODIFICADO: Función para eliminar un almacén con logging
-  const deleteWarehouse = useCallback(async (warehouseId) => {
+  const deleteWarehouse = useCallback(async (warehouseId: string): Promise<boolean> => {
     try {
       // Obtener datos del almacén antes de eliminarlo
-      const warehouseToDelete = warehouses.find(w => w.id === warehouseId);
+      const warehouseToDelete = warehouses.find((w: ControllerWarehouse) => w.id === warehouseId);
       
       // Eliminar el documento de la colección 'warehouses'
       await deleteDoc(doc(db, 'warehouses', warehouseId));
       
       // NUEVO: Registrar actividad de eliminación
       if (warehouseToDelete) {
-        const fieldName = fields.find(f => f.id === warehouseToDelete.fieldId)?.name || null;
+        const fieldName = fields.find((f: ControllerField) => f.id === warehouseToDelete.fieldId)?.name || null;
         
         await logWarehouse('delete', {
           id: warehouseId,
@@ -302,15 +415,15 @@ const useWarehousesController = () => {
       await loadWarehouses();
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al eliminar almacén ${warehouseId}:`, error);
       setError('Error al eliminar almacén: ' + error.message);
       throw error;
     }
-  }, [loadWarehouses, logWarehouse, warehouses, fields, currentUser]);
+  }, [warehouses, loadWarehouses, logWarehouse, fields, currentUser]);
 
   // Función para cargar datos
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (): Promise<void> => {
     try {
       setError('');
       
@@ -321,7 +434,7 @@ const useWarehousesController = () => {
       
       // Cargar almacenes
       await loadWarehouses();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al cargar datos:', err);
       setError('Error al cargar datos: ' + err.message);
     }
@@ -341,10 +454,10 @@ const useWarehousesController = () => {
   }, [loadData]);
 
   // Filtrar almacenes según filtros aplicados
-  const getFilteredWarehouses = useCallback(() => {
+  const getFilteredWarehouses = useCallback((): ControllerWarehouse[] => {
     if (!warehouses || warehouses.length === 0) return [];
     
-    return warehouses.filter(warehouse => {
+    return warehouses.filter((warehouse: ControllerWarehouse) => {
       // Filtro por estado
       if (filters.status !== 'all' && warehouse.status !== filters.status) {
         return false;
@@ -363,10 +476,14 @@ const useWarehousesController = () => {
       // Búsqueda por texto
       if (filters.searchTerm) {
         const term = filters.searchTerm.toLowerCase();
-        return (
-          warehouse.name.toLowerCase().includes(term) ||
-          (warehouse.description && warehouse.description.toLowerCase().includes(term)) ||
-          (warehouse.location && warehouse.location.toLowerCase().includes(term))
+        const searchableFields = [
+          warehouse.name,
+          warehouse.description,
+          warehouse.location
+        ].filter(Boolean);
+        
+        return searchableFields.some(field => 
+          field && field.toString().toLowerCase().includes(term)
         );
       }
       
@@ -380,44 +497,54 @@ const useWarehousesController = () => {
   }, [getFilteredWarehouses]);
 
   // Abrir diálogo para añadir almacén
-  const handleAddWarehouse = useCallback(() => {
+  const handleAddWarehouse = useCallback((): void => {
     setSelectedWarehouse(null);
     setDialogType('add-warehouse');
     setDialogOpen(true);
   }, []);
 
   // Abrir diálogo para editar almacén
-  const handleEditWarehouse = useCallback((warehouse) => {
+  const handleEditWarehouse = useCallback((warehouse: ControllerWarehouse): void => {
     setSelectedWarehouse(warehouse);
     setDialogType('edit-warehouse');
     setDialogOpen(true);
   }, []);
 
   // Abrir diálogo para ver detalles de almacén
-  const handleViewWarehouse = useCallback((warehouse) => {
+  const handleViewWarehouse = useCallback((warehouse: ControllerWarehouse): void => {
     setSelectedWarehouse(warehouse);
     setDialogType('view-warehouse');
     setDialogOpen(true);
   }, []);
 
   // MODIFICADO: Confirmar eliminación de almacén con logging
-  const handleDeleteWarehouse = useCallback(async (warehouseId) => {
-    try {
-      await deleteWarehouse(warehouseId);
-      
-      // Cerrar el diálogo si estaba abierto para este almacén
-      if (selectedWarehouse && selectedWarehouse.id === warehouseId) {
-        setDialogOpen(false);
+  const handleDeleteWarehouse = useCallback(async (warehouseId: string): Promise<void> => {
+    if (window.confirm('¿Estás seguro de que deseas eliminar este almacén? Esta acción no se puede deshacer.')) {
+      try {
+        setError('');
+        
+        await deleteWarehouse(warehouseId);
+        
+        // Cerrar el diálogo si estaba abierto para este almacén
+        if (selectedWarehouse && selectedWarehouse.id === warehouseId) {
+          setDialogOpen(false);
+          setSelectedWarehouse(null);
+        }
+        
+        // Recargar datos
+        await loadData();
+      } catch (err: any) {
+        console.error('Error al eliminar almacén:', err);
+        setError('Error al eliminar almacén: ' + err.message);
       }
-    } catch (err) {
-      console.error('Error al eliminar almacén:', err);
-      setError('Error al eliminar almacén: ' + err.message);
     }
-  }, [deleteWarehouse, selectedWarehouse]);
+  }, [deleteWarehouse, selectedWarehouse, loadData]);
 
   // MODIFICADO: Guardar almacén con logging
-  const handleSaveWarehouse = useCallback(async (warehouseData) => {
+  const handleSaveWarehouse = useCallback(async (warehouseData: Partial<ControllerWarehouse>): Promise<boolean> => {
     try {
+      setError('');
+      
       if (dialogType === 'add-warehouse') {
         // Crear nuevo almacén
         await addWarehouse(warehouseData);
@@ -426,18 +553,20 @@ const useWarehousesController = () => {
         await updateWarehouse(selectedWarehouse.id, warehouseData);
       }
       
+      // Cerrar diálogo y recargar datos
       setDialogOpen(false);
-      await loadWarehouses();
+      setSelectedWarehouse(null);
+      await loadData();
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al guardar almacén:', err);
       setError('Error al guardar almacén: ' + err.message);
       throw err;
     }
-  }, [dialogType, selectedWarehouse, addWarehouse, updateWarehouse, loadWarehouses]);
+  }, [dialogType, selectedWarehouse, addWarehouse, updateWarehouse, loadData]);
 
   // Cambiar filtros
-  const handleFilterChange = useCallback((filterName, value) => {
+  const handleFilterChange = useCallback((filterName: string, value: string): void => {
     setFilters(prev => ({
       ...prev,
       [filterName]: value
@@ -445,7 +574,7 @@ const useWarehousesController = () => {
   }, []);
 
   // Buscar por texto
-  const handleSearch = useCallback((searchTerm) => {
+  const handleSearch = useCallback((searchTerm: string): void => {
     setFilters(prev => ({
       ...prev,
       searchTerm
@@ -453,31 +582,31 @@ const useWarehousesController = () => {
   }, []);
 
   // Cerrar diálogo
-  const handleCloseDialog = useCallback(() => {
+  const handleCloseDialog = useCallback((): void => {
     setDialogOpen(false);
     setSelectedWarehouse(null);
   }, []);
 
   // NUEVO: Función de conveniencia para activar/desactivar almacén
-  const handleToggleWarehouseStatus = useCallback(async (warehouseId, newStatus) => {
+  const handleToggleWarehouseStatus = useCallback(async (warehouseId: string, newStatus: string): Promise<void> => {
     try {
-      const warehouse = warehouses.find(w => w.id === warehouseId);
+      const warehouse = warehouses.find((w: ControllerWarehouse) => w.id === warehouseId);
       if (!warehouse) return;
 
       await updateWarehouse(warehouseId, {
         ...warehouse,
-        status: newStatus
+        status: newStatus as any
       });
 
       // El logging se maneja automáticamente en updateWarehouse
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al cambiar estado del almacén:', err);
       setError('Error al cambiar estado del almacén: ' + err.message);
     }
   }, [warehouses, updateWarehouse]);
 
   // Opciones para filtros
-  const filterOptions = {
+  const filterOptions: FilterOptions = {
     status: [
       { value: 'all', label: 'Todos los estados' },
       { value: 'active', label: 'Activo' },
@@ -514,7 +643,7 @@ const useWarehousesController = () => {
     handleFilterChange,
     handleSearch,
     handleCloseDialog,
-    handleToggleWarehouseStatus, // NUEVO: Función de conveniencia
+    handleToggleWarehouseStatus,
     refreshData: loadData
   };
 };
