@@ -1,8 +1,151 @@
-// src/utils/reportsPdfGenerator.js - Generador de PDFs para reportes
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// src/utils/reportsPdfGenerator.tsx - Generador de PDFs para reportes
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+
+// Declaración de tipo para autoTable si no existe
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+    lastAutoTable: {
+      finalY: number;
+    };
+  }
+}
+
+// Tipos específicos para jsPDF interno
+interface PDFInternal {
+  getCurrentPageInfo(): { pageNumber: number };
+  getNumberOfPages(): number;
+  [key: string]: any;
+}
+
+// Interfaces para TypeScript
+interface ReportFilters {
+  startDate?: string | Date;
+  endDate?: string | Date;
+  status?: string;
+  category?: string;
+  [key: string]: any;
+}
+
+interface Product {
+  id?: string;
+  name?: string;
+  category?: string;
+  stock?: number;
+  minStock?: number;
+  unit?: string;
+  cost?: number;
+  [key: string]: any;
+}
+
+interface Transfer {
+  id?: string;
+  transferNumber?: string;
+  requestDate?: any;
+  createdAt?: any;
+  sourceWarehouse?: { name?: string };
+  targetWarehouse?: { name?: string };
+  products?: any[];
+  status?: string;
+  requestedBy?: string;
+  [key: string]: any;
+}
+
+interface Fumigation {
+  id?: string;
+  orderNumber?: string;
+  applicationDate?: any;
+  establishment?: string;
+  crop?: string;
+  totalSurface?: number;
+  applicator?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface Harvest {
+  id?: string;
+  field?: { name?: string };
+  crop?: string;
+  plannedDate?: any;
+  totalArea?: number;
+  estimatedYield?: number;
+  actualYield?: number;
+  status?: string;
+  [key: string]: any;
+}
+
+interface Purchase {
+  id?: string;
+  purchaseNumber?: string;
+  purchaseDate?: any;
+  supplier?: string;
+  products?: any[];
+  totalAmount?: number;
+  status?: string;
+  createdBy?: string;
+  [key: string]: any;
+}
+
+interface Expense {
+  id?: string;
+  type?: 'product' | 'misc';
+  productName?: string;
+  description?: string;
+  totalAmount?: number;
+  amount?: number;
+  createdBy?: string;
+  [key: string]: any;
+}
+
+interface Activity {
+  id?: string;
+  date?: any;
+  type?: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface Field {
+  id?: string;
+  name?: string;
+  location?: string;
+  area?: number;
+  areaUnit?: string;
+  lots?: any[];
+  owner?: string;
+  [key: string]: any;
+}
+
+interface Warehouse {
+  id?: string;
+  name?: string;
+  type?: string;
+  location?: string;
+  capacity?: number;
+  capacityUnit?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface InventoryData {
+  fields?: Field[];
+  warehouses?: Warehouse[];
+}
+
+type ReportData = Product[] | Transfer[] | Fumigation[] | Harvest[] | Purchase[] | Expense[] | Activity[] | InventoryData;
 
 class ReportsPDFGenerator {
+  private doc: jsPDF | null;
+  private pageWidth: number;
+  private pageHeight: number;
+  private margin: number;
+  private contentWidth: number;
+  private currentY: number;
+
   constructor() {
     this.doc = null;
     this.pageWidth = 210; // A4 width in mm
@@ -13,7 +156,7 @@ class ReportsPDFGenerator {
   }
 
   // Función principal para generar reportes
-  generateReport(reportType, data, filters = {}, title = 'Reporte') {
+  generateReport(reportType: string, data: ReportData, filters: ReportFilters = {}, title: string = 'Reporte'): jsPDF {
     try {
       this.doc = new jsPDF();
       this.currentY = this.margin;
@@ -24,28 +167,28 @@ class ReportsPDFGenerator {
       // Contenido específico según el tipo de reporte
       switch (reportType) {
         case 'products':
-          this.addProductsReport(data);
+          this.addProductsReport(data as Product[]);
           break;
         case 'transfers':
-          this.addTransfersReport(data);
+          this.addTransfersReport(data as Transfer[]);
           break;
         case 'fumigations':
-          this.addFumigationsReport(data);
+          this.addFumigationsReport(data as Fumigation[]);
           break;
         case 'harvests':
-          this.addHarvestsReport(data);
+          this.addHarvestsReport(data as Harvest[]);
           break;
         case 'purchases':
-          this.addPurchasesReport(data);
+          this.addPurchasesReport(data as Purchase[]);
           break;
         case 'expenses':
-          this.addExpensesReport(data);
+          this.addExpensesReport(data as Expense[]);
           break;
         case 'activities':
-          this.addActivitiesReport(data);
+          this.addActivitiesReport(data as Activity[]);
           break;
         case 'inventory':
-          this.addInventoryReport(data);
+          this.addInventoryReport(data as InventoryData);
           break;
         default:
           throw new Error('Tipo de reporte no válido');
@@ -57,12 +200,14 @@ class ReportsPDFGenerator {
       return this.doc;
     } catch (error) {
       console.error('Error al generar PDF:', error);
-      throw new Error('Error al generar el PDF del reporte: ' + error.message);
+      throw new Error('Error al generar el PDF del reporte: ' + (error as Error).message);
     }
   }
 
   // Encabezado del reporte
-  addReportHeader(title, filters) {
+  private addReportHeader(title: string, filters: ReportFilters): void {
+    if (!this.doc) return;
+
     // Logo y título de la empresa
     this.doc.setFontSize(20);
     this.doc.setFont('helvetica', 'bold');
@@ -110,7 +255,7 @@ class ReportsPDFGenerator {
   }
 
   // Reporte de productos
-  addProductsReport(products) {
+  private addProductsReport(products: Product[]): void {
     if (!products || products.length === 0) {
       this.addNoDataMessage('No se encontraron productos con los filtros aplicados.');
       return;
@@ -145,7 +290,7 @@ class ReportsPDFGenerator {
   }
 
   // Reporte de transferencias
-  addTransfersReport(transfers) {
+  private addTransfersReport(transfers: Transfer[]): void {
     if (!transfers || transfers.length === 0) {
       this.addNoDataMessage('No se encontraron transferencias con los filtros aplicados.');
       return;
@@ -180,7 +325,7 @@ class ReportsPDFGenerator {
   }
 
   // Reporte de fumigaciones
-  addFumigationsReport(fumigations) {
+  private addFumigationsReport(fumigations: Fumigation[]): void {
     if (!fumigations || fumigations.length === 0) {
       this.addNoDataMessage('No se encontraron fumigaciones con los filtros aplicados.');
       return;
@@ -215,7 +360,7 @@ class ReportsPDFGenerator {
   }
 
   // Reporte de cosechas
-  addHarvestsReport(harvests) {
+  private addHarvestsReport(harvests: Harvest[]): void {
     if (!harvests || harvests.length === 0) {
       this.addNoDataMessage('No se encontraron cosechas con los filtros aplicados.');
       return;
@@ -226,7 +371,7 @@ class ReportsPDFGenerator {
     const completedHarvests = harvests.filter(h => h.status === 'completed').length;
     const pendingHarvests = harvests.filter(h => h.status === 'pending').length;
     const totalArea = harvests.reduce((sum, h) => sum + (h.totalArea || 0), 0);
-    const totalHarvested = harvests.reduce((sum, h) => sum + (h.totalHarvested || 0), 0);
+    const totalHarvested = harvests.reduce((sum, h) => sum + (h.actualYield || 0), 0);
     
     this.addSummarySection('Resumen de Cosechas', [
       ['Total de cosechas:', totalHarvests.toString()],
@@ -252,7 +397,7 @@ class ReportsPDFGenerator {
   }
 
   // Reporte de compras
-  addPurchasesReport(purchases) {
+  private addPurchasesReport(purchases: Purchase[]): void {
     if (!purchases || purchases.length === 0) {
       this.addNoDataMessage('No se encontraron compras con los filtros aplicados.');
       return;
@@ -289,7 +434,7 @@ class ReportsPDFGenerator {
   }
 
   // Reporte de gastos
-  addExpensesReport(expenses) {
+  private addExpensesReport(expenses: Expense[]): void {
     if (!expenses || expenses.length === 0) {
       this.addNoDataMessage('No se encontraron gastos con los filtros aplicados.');
       return;
@@ -311,13 +456,12 @@ class ReportsPDFGenerator {
     ]);
     
     // Tabla de gastos
-    const headers = [['Número', 'Fecha', 'Tipo', 'Descripción', 'Monto', 'Creado por']];
+    const headers = [['Fecha', 'Tipo', 'Concepto', 'Monto', 'Creado por']];
     const rows = expenses.map(expense => [
-      expense.expenseNumber || expense.id?.substring(0, 8) || '',
-      this.formatDate(expense.date),
+      this.formatDate((expense as any).date),
       expense.type === 'product' ? 'Venta' : 'Gasto',
-      expense.type === 'product' ? expense.productName : expense.description,
-      this.formatCurrency(expense.type === 'product' ? expense.totalAmount : expense.amount),
+      expense.type === 'product' ? (expense.productName || '') : (expense.description || ''),
+      this.formatCurrency(expense.type === 'product' ? (expense.totalAmount || 0) : (expense.amount || 0)),
       expense.createdBy || ''
     ]);
     
@@ -325,7 +469,7 @@ class ReportsPDFGenerator {
   }
 
   // Reporte de actividades generales
-  addActivitiesReport(activities) {
+  private addActivitiesReport(activities: Activity[]): void {
     if (!activities || activities.length === 0) {
       this.addNoDataMessage('No se encontraron actividades con los filtros aplicados.');
       return;
@@ -361,7 +505,7 @@ class ReportsPDFGenerator {
   }
 
   // Reporte de inventario (campos y almacenes)
-  addInventoryReport(data) {
+  private addInventoryReport(data: InventoryData): void {
     const { fields = [], warehouses = [] } = data;
     
     // Resumen de campos
@@ -416,13 +560,15 @@ class ReportsPDFGenerator {
   }
 
   // Añadir sección de resumen
-  addSummarySection(title, data) {
+  private addSummarySection(title: string, data: string[][]): void {
+    if (!this.doc) return;
+
     this.doc.setFontSize(14);
     this.doc.setFont('helvetica', 'bold');
     this.doc.text(title, this.margin, this.currentY);
     this.currentY += 8;
     
-    autoTable(this.doc, {
+    this.doc.autoTable({
       startY: this.currentY,
       body: data,
       bodyStyles: {
@@ -445,7 +591,9 @@ class ReportsPDFGenerator {
   }
 
   // Añadir tabla de datos
-  addDataTable(headers, rows, title) {
+  private addDataTable(headers: string[][], rows: string[][], title: string): void {
+    if (!this.doc) return;
+
     // Verificar si necesitamos una nueva página
     if (this.currentY > this.pageHeight - 80) {
       this.doc.addPage();
@@ -457,7 +605,7 @@ class ReportsPDFGenerator {
     this.doc.text(title, this.margin, this.currentY);
     this.currentY += 8;
     
-    autoTable(this.doc, {
+    this.doc.autoTable({
       startY: this.currentY,
       head: headers,
       body: rows,
@@ -479,12 +627,13 @@ class ReportsPDFGenerator {
       tableLineWidth: 0.3,
       margin: { left: this.margin, right: this.margin },
       theme: 'striped',
-      didDrawPage: (data) => {
+      didDrawPage: (data: any) => {
         // Añadir número de página
-        const pageNumber = this.doc.internal.getCurrentPageInfo().pageNumber;
-        this.doc.setFontSize(8);
-        this.doc.setFont('helvetica', 'normal');
-        this.doc.text(
+        const doc = this.doc as any;
+        const pageNumber = doc.internal.getCurrentPageInfo().pageNumber;
+        this.doc!.setFontSize(8);
+        this.doc!.setFont('helvetica', 'normal');
+        this.doc!.text(
           `Página ${pageNumber}`,
           this.pageWidth - this.margin - 20,
           this.pageHeight - 10
@@ -496,7 +645,9 @@ class ReportsPDFGenerator {
   }
 
   // Añadir mensaje cuando no hay datos
-  addNoDataMessage(message) {
+  private addNoDataMessage(message: string): void {
+    if (!this.doc) return;
+
     this.doc.setFontSize(12);
     this.doc.setFont('helvetica', 'normal');
     this.doc.text(message, this.margin, this.currentY);
@@ -504,8 +655,11 @@ class ReportsPDFGenerator {
   }
 
   // Pie de página del reporte
-  addReportFooter() {
-    const pageCount = this.doc.internal.getNumberOfPages();
+  private addReportFooter(): void {
+    if (!this.doc) return;
+
+    const doc = this.doc as any;
+    const pageCount = doc.internal.getNumberOfPages();
     
     for (let i = 1; i <= pageCount; i++) {
       this.doc.setPage(i);
@@ -532,7 +686,7 @@ class ReportsPDFGenerator {
   }
 
   // Funciones de utilidad
-  formatDate(date) {
+  private formatDate(date: any): string {
     if (!date) return 'Sin fecha';
     
     const d = new Date(date);
@@ -545,15 +699,15 @@ class ReportsPDFGenerator {
     });
   }
 
-  formatCurrency(amount) {
+  private formatCurrency(amount: number): string {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: 'ARS'
     }).format(amount || 0);
   }
 
-  getStatusText(status) {
-    const statusMap = {
+  private getStatusText(status?: string): string {
+    const statusMap: { [key: string]: string } = {
       'pending': 'Pendiente',
       'approved': 'Aprobado',
       'rejected': 'Rechazado',
@@ -567,11 +721,11 @@ class ReportsPDFGenerator {
       'partial_delivered': 'Entrega Parcial'
     };
     
-    return statusMap[status] || status || 'Desconocido';
+    return statusMap[status || ''] || status || 'Desconocido';
   }
 
-  getActivityTypeText(type) {
-    const typeMap = {
+  private getActivityTypeText(type?: string): string {
+    const typeMap: { [key: string]: string } = {
       'transfer': 'Transferencia',
       'fumigation': 'Fumigación',
       'harvest': 'Cosecha',
@@ -579,11 +733,11 @@ class ReportsPDFGenerator {
       'expense': 'Gasto'
     };
     
-    return typeMap[type] || type || 'Desconocido';
+    return typeMap[type || ''] || type || 'Desconocido';
   }
 
   // Métodos para descargar y obtener el PDF
-  downloadPDF(filename = null) {
+  downloadPDF(filename: string | null = null): void {
     if (!this.doc) {
       throw new Error('No hay documento PDF generado');
     }
@@ -592,14 +746,14 @@ class ReportsPDFGenerator {
     this.doc.save(filename || defaultFilename);
   }
 
-  getPDFBlob() {
+  getPDFBlob(): Blob {
     if (!this.doc) {
       throw new Error('No hay documento PDF generado');
     }
     return this.doc.output('blob');
   }
 
-  getPDFDataURL() {
+  getPDFDataURL(): string {
     if (!this.doc) {
       throw new Error('No hay documento PDF generado');
     }
@@ -608,13 +762,13 @@ class ReportsPDFGenerator {
 }
 
 // Exportar funciones
-export const generateReportPDF = async (reportType, data, filters = {}, title = 'Reporte') => {
+export const generateReportPDF = async (reportType: string, data: ReportData, filters: ReportFilters = {}, title: string = 'Reporte'): Promise<ReportsPDFGenerator> => {
   const generator = new ReportsPDFGenerator();
   generator.generateReport(reportType, data, filters, title);
   return generator;
 };
 
-export const downloadReportPDF = async (reportType, data, filters = {}, title = 'Reporte', filename = null) => {
+export const downloadReportPDF = async (reportType: string, data: ReportData, filters: ReportFilters = {}, title: string = 'Reporte', filename: string | null = null): Promise<void> => {
   const generator = await generateReportPDF(reportType, data, filters, title);
   generator.downloadPDF(filename);
 };

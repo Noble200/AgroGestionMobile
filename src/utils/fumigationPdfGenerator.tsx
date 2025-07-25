@@ -1,18 +1,75 @@
-// src/utils/fumigationPdfGenerator.js - Generador PDF EXACTO al documento original
+// src/utils/fumigationPdfGenerator.tsx - Generador PDF EXACTO al documento original
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Interfaces para TypeScript
+interface Fumigation {
+  id?: string;
+  orderNumber?: string;
+  establishment?: string;
+  applicator?: string;
+  applicationDate?: any;
+  crop?: string;
+  totalSurface?: number;
+  flowRate?: number;
+  observations?: string;
+  selectedProducts?: SelectedProduct[];
+  lots?: Lot[];
+  field?: {
+    name?: string;
+  };
+  fieldId?: string;
+  [key: string]: any;
+}
+
+interface SelectedProduct {
+  productId: string;
+  dosePerHa: number;
+  doseUnit: string;
+  totalQuantity: number;
+  unit: string;
+  [key: string]: any;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  category?: string;
+  unit?: string;
+  [key: string]: any;
+}
+
+interface Lot {
+  id: string;
+  name: string;
+  area?: number;
+  [key: string]: any;
+}
+
+interface Observation {
+  text: string;
+  color: [number, number, number];
+}
+
 class FumigationPDFGenerator {
+  private doc: jsPDF | null;
+  private pageWidth: number;
+  private pageHeight: number;
+  private margin: number;
+  private contentWidth: number;
+  private currentY: number;
+
   constructor() {
     this.doc = null;
     this.pageWidth = 210; // A4 width in mm
     this.pageHeight = 297; // A4 height in mm
     this.margin = 15; // Reducido de 20 a 15 para más espacio
     this.contentWidth = this.pageWidth - (this.margin * 2);
+    this.currentY = 0;
   }
 
   // Función principal para generar PDF de fumigación
-  async generateFumigationOrder(fumigation, products = [], mapImage = null) {
+  async generateFumigationOrder(fumigation: Fumigation, products: Product[] = [], mapImage: File | null = null): Promise<jsPDF> {
     try {
       this.doc = new jsPDF();
       this.currentY = this.margin;
@@ -40,12 +97,14 @@ class FumigationPDFGenerator {
       return this.doc;
     } catch (error) {
       console.error('Error al generar PDF:', error);
-      throw new Error('Error al generar el PDF de fumigación: ' + error.message);
+      throw new Error('Error al generar el PDF de fumigación: ' + (error as Error).message);
     }
   }
 
   // Encabezado EXACTO al original pero más compacto
-  addHeader(fumigation) {
+  private addHeader(fumigation: Fumigation): void {
+    if (!this.doc) return;
+
     autoTable(this.doc, {
       startY: this.currentY,
       body: [['ORDEN DE APLICACIÓN', `N° ${fumigation.orderNumber || '23'}`]],
@@ -69,11 +128,13 @@ class FumigationPDFGenerator {
       theme: 'grid'
     });
     
-    this.currentY = this.doc.lastAutoTable.finalY;
+    this.currentY = (this.doc as any).lastAutoTable.finalY;
   }
 
   // Información del establecimiento más compacta
-  addEstablishmentInfo(fumigation) {
+  private addEstablishmentInfo(fumigation: Fumigation): void {
+    if (!this.doc) return;
+
     const data = [
       ['FECHA:', this.formatDate(fumigation.applicationDate)],
       ['ESTABLECIMIENTO:', fumigation.establishment || 'El Charabón'],
@@ -101,17 +162,16 @@ class FumigationPDFGenerator {
       theme: 'grid'
     });
     
-    this.currentY = this.doc.lastAutoTable.finalY;
+    this.currentY = (this.doc as any).lastAutoTable.finalY;
   }
 
-  // Tabla de productos compacta pero manteniendo diseño
-  addProductsTable(fumigation, products) {
-    // Headers exactos
-    const headers = [['CULTIVO', 'LOTE', 'SUPERFICIE', 'PRODUCTO', 'DOSIS / HA', 'TOTAL\nPRODUCTO']];
-    
-    // Datos de productos
+  // Tabla de productos exacta al original pero más compacta
+  private addProductsTable(fumigation: Fumigation, products: Product[]): void {
+    if (!this.doc) return;
+
+    const headers = [['CULTIVO', 'LOTE', 'SUPERFICIE\n(HA)', 'PRODUCTO', 'DOSIS', 'TOTAL']];
     const productData = this.prepareProductData(fumigation, products);
-    
+
     autoTable(this.doc, {
       startY: this.currentY,
       head: headers,
@@ -119,30 +179,27 @@ class FumigationPDFGenerator {
       headStyles: {
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
-        fontStyle: 'bold',
-        fontSize: 9, // Reducido de 10 a 9
-        halign: 'center',
+        fontSize: 10, // Reducido de 11 a 10
+        cellPadding: 3, // Reducido de 4 a 3
         lineWidth: 2,
         lineColor: [0, 0, 0],
-        cellPadding: 2 // Reducido de 3 a 2
+        fontStyle: 'bold',
+        halign: 'center'
       },
       bodyStyles: {
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
         fontSize: 9, // Reducido de 10 a 9
-        cellPadding: 2, // Reducido de 3 a 2
+        cellPadding: 3, // Reducido de 4 a 3
         lineWidth: 2,
         lineColor: [0, 0, 0],
         halign: 'center'
       },
       columnStyles: {
         0: { halign: 'center' }, // CULTIVO
-        1: { 
-          halign: 'center',
-          fillColor: [144, 238, 144] // Verde exacto del original
-        }, // LOTE
+        1: { halign: 'center' }, // LOTE
         2: { halign: 'center' }, // SUPERFICIE
-        3: { halign: 'left' }, // PRODUCTO
+        3: { halign: 'center' }, // PRODUCTO
         4: { halign: 'center' }, // DOSIS
         5: { halign: 'center' }  // TOTAL
       },
@@ -150,7 +207,7 @@ class FumigationPDFGenerator {
       tableLineWidth: 2,
       margin: { left: this.margin, right: this.margin },
       theme: 'grid',
-      didParseCell: function(data) {
+      didParseCell: function(data: any) {
         // Aplicar verde solo a la celda del lote con contenido
         if (data.column.index === 1 && data.row.index >= 0 && data.cell.text[0] !== '') {
           data.cell.styles.fillColor = [144, 238, 144];
@@ -158,12 +215,12 @@ class FumigationPDFGenerator {
       }
     });
     
-    this.currentY = this.doc.lastAutoTable.finalY;
+    this.currentY = (this.doc as any).lastAutoTable.finalY;
   }
 
   // Preparar datos de productos exacto al original
-  prepareProductData(fumigation, products) {
-    const rows = [];
+  private prepareProductData(fumigation: Fumigation, products: Product[]): string[][] {
+    const rows: string[][] = [];
     
     if (!fumigation.selectedProducts || fumigation.selectedProducts.length === 0) {
       // Datos de ejemplo como en el original
@@ -196,7 +253,7 @@ class FumigationPDFGenerator {
     }
 
     // Datos reales de la fumigación
-    fumigation.selectedProducts.forEach((selectedProduct, index) => {
+    fumigation.selectedProducts.forEach((selectedProduct: SelectedProduct, index: number) => {
       const productInfo = products.find(p => p.id === selectedProduct.productId);
       const productName = productInfo ? productInfo.name : 'Producto desconocido';
       
@@ -205,7 +262,7 @@ class FumigationPDFGenerator {
         rows.push([
           fumigation.crop || 'Soja',
           this.getLotsText(fumigation),
-          fumigation.totalSurface || '75',
+          (fumigation.totalSurface || 75).toString(),
           productName,
           this.formatDose(selectedProduct),
           this.formatTotal(selectedProduct)
@@ -227,7 +284,9 @@ class FumigationPDFGenerator {
   }
 
   // Campos de fecha y hora más compactos
-  addTimeFields() {
+  private addTimeFields(): void {
+    if (!this.doc) return;
+
     const timeData = [
       ['FECHA Y HORA DE INICIO', ''],
       ['FECHA Y HORA DE FIN', '']
@@ -256,11 +315,13 @@ class FumigationPDFGenerator {
       theme: 'grid'
     });
     
-    this.currentY = this.doc.lastAutoTable.finalY;
+    this.currentY = (this.doc as any).lastAutoTable.finalY;
   }
 
   // Observaciones más compactas
-  addObservations(fumigation) {
+  private addObservations(fumigation: Fumigation): void {
+    if (!this.doc) return;
+
     // Header de observaciones más compacto
     autoTable(this.doc, {
       startY: this.currentY,
@@ -281,10 +342,10 @@ class FumigationPDFGenerator {
       theme: 'grid'
     });
     
-    this.currentY = this.doc.lastAutoTable.finalY;
+    this.currentY = (this.doc as any).lastAutoTable.finalY;
 
     // Observaciones exactas del original
-    const observations = [
+    const observations: Observation[] = [
       {
         text: `Mantener caudal mayor a ${fumigation.flowRate || 80} lts de caldo por hectárea.`,
         color: [255, 255, 255]
@@ -312,7 +373,9 @@ class FumigationPDFGenerator {
     }
     
     // Renderizar cada observación más compacta
-    observations.forEach((obs) => {
+    observations.forEach((obs: Observation) => {
+      if (!this.doc) return;
+
       autoTable(this.doc, {
         startY: this.currentY,
         body: [[obs.text]],
@@ -331,12 +394,14 @@ class FumigationPDFGenerator {
         theme: 'grid'
       });
       
-      this.currentY = this.doc.lastAutoTable.finalY;
+      this.currentY = (this.doc as any).lastAutoTable.finalY;
     });
   }
 
   // Agregar mapa optimizado para una sola página
-  async addMapAtBottom(imageFile) {
+  private async addMapAtBottom(imageFile: File): Promise<void> {
+    if (!this.doc) return;
+
     try {
       const imageDataUrl = await this.fileToDataURL(imageFile);
       
@@ -383,17 +448,17 @@ class FumigationPDFGenerator {
   }
 
   // Convertir archivo a Data URL
-  fileToDataURL(file) {
+  private fileToDataURL(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (event) => resolve(event.target.result);
+      reader.onload = (event) => resolve(event.target?.result as string);
       reader.onerror = (error) => reject(error);
       reader.readAsDataURL(file);
     });
   }
 
   // Obtener texto de lotes
-  getLotsText(fumigation) {
+  private getLotsText(fumigation: Fumigation): string {
     if (!fumigation.lots || fumigation.lots.length === 0) {
       return 'Lotes 1A y 1B';
     }
@@ -401,12 +466,12 @@ class FumigationPDFGenerator {
   }
 
   // Formatear dosis exacto al original
-  formatDose(product) {
+  private formatDose(product: SelectedProduct): string {
     return `${product.dosePerHa} ${product.doseUnit}`;
   }
 
   // Formatear total exacto al original
-  formatTotal(product) {
+  private formatTotal(product: SelectedProduct): string {
     const total = product.totalQuantity || 0;
     const unit = product.unit || 'L';
     
@@ -430,7 +495,7 @@ class FumigationPDFGenerator {
   }
 
   // Formatear fecha exacto al original
-  formatDate(date) {
+  private formatDate(date: any): string {
     if (!date) return '13 de marzo 2025';
     
     const d = date.seconds ? new Date(date.seconds * 1000) : new Date(date);
@@ -444,7 +509,7 @@ class FumigationPDFGenerator {
   }
 
   // Descargar PDF
-  downloadPDF(fumigation, filename = null) {
+  downloadPDF(fumigation: Fumigation, filename: string | null = null): void {
     if (!this.doc) {
       throw new Error('No hay documento PDF generado');
     }
@@ -454,7 +519,7 @@ class FumigationPDFGenerator {
   }
 
   // Obtener blob del PDF
-  getPDFBlob() {
+  getPDFBlob(): Blob {
     if (!this.doc) {
       throw new Error('No hay documento PDF generado');
     }
@@ -462,7 +527,7 @@ class FumigationPDFGenerator {
   }
 
   // Obtener data URL del PDF
-  getPDFDataURL() {
+  getPDFDataURL(): string {
     if (!this.doc) {
       throw new Error('No hay documento PDF generado');
     }
@@ -471,13 +536,13 @@ class FumigationPDFGenerator {
 }
 
 // Exportar funciones
-export const generateFumigationPDF = async (fumigation, products = [], mapImage = null) => {
+export const generateFumigationPDF = async (fumigation: Fumigation, products: Product[] = [], mapImage: File | null = null): Promise<FumigationPDFGenerator> => {
   const generator = new FumigationPDFGenerator();
   await generator.generateFumigationOrder(fumigation, products, mapImage);
   return generator;
 };
 
-export const downloadFumigationPDF = async (fumigation, products = [], mapImage = null, filename = null) => {
+export const downloadFumigationPDF = async (fumigation: Fumigation, products: Product[] = [], mapImage: File | null = null, filename: string | null = null): Promise<void> => {
   const generator = await generateFumigationPDF(fumigation, products, mapImage);
   generator.downloadPDF(fumigation, filename);
 };

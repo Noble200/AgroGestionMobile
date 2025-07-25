@@ -1,75 +1,185 @@
-// src/hooks/useActivityLogger.js - CORREGIDO: Timestamps del servidor
+// src/hooks/useActivityLogger.tsx
 import { useCallback } from 'react';
 import { useActivities } from '../contexts/ActivityContext';
 
-// Mapeo de acciones a descripciones en español
-const actionDescriptions = {
+// Interfaces para TypeScript
+interface EntityData {
+  id?: string;
+  _id?: string;
+  uid?: string;
+  name?: string;
+  transferNumber?: string;
+  orderNumber?: string;
+  expenseNumber?: string;
+  purchaseNumber?: string;
+  username?: string;
+  displayName?: string;
+  title?: string;
+  description?: string;
+  [key: string]: any;
+}
+
+interface AdditionalData {
+  [key: string]: any;
+}
+
+interface Metadata {
+  [key: string]: any;
+}
+
+interface Product extends EntityData {
+  category?: string;
+  stock?: number;
+  minStock?: number;
+  unit?: string;
+  warehouseId?: string;
+  fieldId?: string;
+  cost?: number;
+}
+
+interface Transfer extends EntityData {
+  transferNumber?: string;
+  sourceWarehouse?: { name?: string };
+  targetWarehouse?: { name?: string };
+  sourceWarehouseId?: string;
+  targetWarehouseId?: string;
+  status?: string;
+  transferDate?: any;
+  productCount?: number;
+}
+
+interface Fumigation extends EntityData {
+  orderNumber?: string;
+  crop?: string;
+  fieldId?: string;
+  field?: { name?: string };
+  status?: string;
+  applicationDate?: any;
+  selectedProducts?: any[];
+}
+
+interface Harvest extends EntityData {
+  harvestNumber?: string;
+  crop?: string;
+  fieldId?: string;
+  field?: { name?: string };
+  status?: string;
+  harvestDate?: any;
+  estimatedYield?: number;
+  yieldUnit?: string;
+}
+
+interface Purchase extends EntityData {
+  purchaseNumber?: string;
+  supplier?: string;
+  status?: string;
+  purchaseDate?: any;
+  deliveries?: any[];
+}
+
+interface Expense extends EntityData {
+  expenseNumber?: string;
+  type?: string;
+  amount?: number;
+  totalAmount?: number;
+  category?: string;
+  productCategory?: string;
+  productName?: string;
+  quantitySold?: number;
+  supplier?: string;
+  date?: any;
+}
+
+interface Field extends EntityData {
+  location?: string;
+  area?: number;
+  areaUnit?: string;
+  owner?: string;
+  lots?: any[];
+  status?: string;
+  soilType?: string;
+}
+
+interface Warehouse extends EntityData {
+  type?: string;
+  location?: string;
+  capacity?: number;
+  capacityUnit?: string;
+  fieldId?: string;
+  status?: string;
+  storageCondition?: string;
+  supervisor?: string;
+}
+
+interface User extends EntityData {
+  username?: string;
+  email?: string;
+  role?: string;
+  permissions?: { [key: string]: any };
+  displayName?: string;
+}
+
+// Descripciones de acciones
+const actionDescriptions: { [key: string]: string } = {
   // Productos
-  'product-create': 'Creó un nuevo producto',
+  'product-create': 'Creó un producto',
   'product-update': 'Actualizó un producto',
   'product-delete': 'Eliminó un producto',
-  'product-stock-adjust': 'Ajustó el stock de un producto',
-  'product-move': 'Trasladó un producto',
+  'product-stock-adjust': 'Ajustó stock de producto',
+  'product-stock-increase': 'Aumentó stock de producto',
+  'product-stock-decrease': 'Redujo stock de producto',
   
   // Transferencias
-  'transfer-create': 'Creó una nueva transferencia',
+  'transfer-create': 'Creó una transferencia',
   'transfer-update': 'Actualizó una transferencia',
-  'transfer-approve': 'Aprobó una transferencia',
-  'transfer-reject': 'Rechazó una transferencia',
-  'transfer-ship': 'Envió una transferencia',
-  'transfer-receive': 'Recibió una transferencia',
-  'transfer-cancel': 'Canceló una transferencia',
   'transfer-delete': 'Eliminó una transferencia',
+  'transfer-complete': 'Completó una transferencia',
+  'transfer-cancel': 'Canceló una transferencia',
+  'transfer-approve': 'Aprobó una transferencia',
   
   // Fumigaciones
-  'fumigation-create': 'Programó una nueva fumigación',
+  'fumigation-create': 'Creó una fumigación',
   'fumigation-update': 'Actualizó una fumigación',
+  'fumigation-delete': 'Eliminó una fumigación',
   'fumigation-complete': 'Completó una fumigación',
   'fumigation-cancel': 'Canceló una fumigación',
-  'fumigation-delete': 'Eliminó una fumigación',
-  'fumigation-schedule': 'Reprogramó una fumigación',
   
   // Cosechas
-  'harvest-create': 'Programó una nueva cosecha',
+  'harvest-create': 'Creó una cosecha',
   'harvest-update': 'Actualizó una cosecha',
+  'harvest-delete': 'Eliminó una cosecha',
   'harvest-complete': 'Completó una cosecha',
   'harvest-cancel': 'Canceló una cosecha',
-  'harvest-delete': 'Eliminó una cosecha',
-  'harvest-schedule': 'Reprogramó una cosecha',
   
   // Compras
-  'purchase-create': 'Registró una nueva compra',
+  'purchase-create': 'Creó una compra',
   'purchase-update': 'Actualizó una compra',
   'purchase-delete': 'Eliminó una compra',
-  'purchase-approve': 'Aprobó una compra',
-  'purchase-delivery-create': 'Creó una entrega de compra',
-  'purchase-delivery-complete': 'Completó una entrega de compra',
-  'purchase-delivery-cancel': 'Canceló una entrega de compra',
+  'purchase-complete': 'Completó una compra',
+  'purchase-cancel': 'Canceló una compra',
+  'purchase-delivery-add': 'Añadió entrega a compra',
   
   // Gastos
-  'expense-create': 'Registró un nuevo gasto',
+  'expense-create': 'Creó un gasto',
   'expense-update': 'Actualizó un gasto',
   'expense-delete': 'Eliminó un gasto',
-  'expense-product-sale': 'Registró venta de producto',
-  'expense-misc': 'Registró gasto varios',
   
   // Campos
-  'field-create': 'Creó un nuevo campo',
+  'field-create': 'Creó un campo',
   'field-update': 'Actualizó un campo',
   'field-delete': 'Eliminó un campo',
-  'field-lot-add': 'Añadió un lote al campo',
-  'field-lot-update': 'Actualizó un lote del campo',
-  'field-lot-delete': 'Eliminó un lote del campo',
+  'field-lot-add': 'Añadió lote a campo',
+  'field-lot-remove': 'Eliminó lote de campo',
   
   // Almacenes
-  'warehouse-create': 'Creó un nuevo almacén',
+  'warehouse-create': 'Creó un almacén',
   'warehouse-update': 'Actualizó un almacén',
   'warehouse-delete': 'Eliminó un almacén',
   'warehouse-activate': 'Activó un almacén',
   'warehouse-deactivate': 'Desactivó un almacén',
   
   // Usuarios
-  'user-create': 'Creó un nuevo usuario',
+  'user-create': 'Creó un usuario',
   'user-update': 'Actualizó un usuario',
   'user-delete': 'Eliminó un usuario',
   'user-permissions-update': 'Actualizó permisos de usuario',
@@ -85,8 +195,8 @@ const actionDescriptions = {
 export const useActivityLogger = () => {
   const { logActivity } = useActivities();
 
-  // CORREGIDO: Función principal para registrar actividades con timestamp del servidor
-  const log = useCallback(async (action, entityData, additionalData = {}) => {
+  // Función principal para registrar actividades con timestamp del servidor
+  const log = useCallback(async (action: string, entityData: EntityData, additionalData: AdditionalData = {}) => {
     try {
       console.log('🔄 ActivityLogger - Registrando actividad:', {
         action,
@@ -103,27 +213,26 @@ export const useActivityLogger = () => {
         return;
       }
       
-      // CORREGIDO: Construir el objeto de actividad sin incluir timestamp local
-      const activityData = {
-        type: actionType, // 'create', 'update', 'delete', etc.
-        entity: entity, // 'product', 'transfer', etc.
-        entityId: getEntityId(entityData),
-        entityName: getEntityName(entityData),
-        action: actionDescriptions[action] || `${actionType} ${entity}`,
-        description: generateDescription(action, entityData, additionalData),
-        metadata: cleanMetadata({
-          ...additionalData,
-          // CORREGIDO: No incluir timestamp local, Firebase usará serverTimestamp()
-          userAgent: navigator.userAgent,
-          originalData: sanitizeEntityData(entityData)
-        })
-        // CORREGIDO: NO incluir createdAt aquí, se manejará en el contexto con serverTimestamp()
-      };
+      // Preparar la descripción y metadata
+      const description = generateDescription(action, entityData, additionalData);
+      const metadata = cleanMetadata({
+        ...additionalData,
+        // No incluir timestamp local, Firebase usará serverTimestamp()
+        userAgent: navigator.userAgent,
+        originalData: sanitizeEntityData(entityData)
+      });
 
-      console.log('✅ ActivityLogger - Datos de actividad preparados:', activityData);
+      console.log('✅ ActivityLogger - Datos de actividad preparados');
       
-      // CORREGIDO: El contexto manejará el serverTimestamp()
-      await logActivity(activityData);
+      // Llamar a logActivity con los parámetros correctos según tu ActivityContext
+      await logActivity(
+        actionType,           // type: string
+        description,          // action: string (descripción de la acción)
+        entity,              // entity: string
+        entityData,          // entityData?: any
+        metadata             // metadata?: any
+      );
+      
       console.log('🎉 ActivityLogger - Actividad registrada exitosamente');
       
     } catch (error) {
@@ -133,7 +242,7 @@ export const useActivityLogger = () => {
   }, [logActivity]);
 
   // Métodos específicos para cada tipo de entidad
-  const logProduct = useCallback((action, product, additionalData = {}) => {
+  const logProduct = useCallback((action: string, product: Product, additionalData: AdditionalData = {}) => {
     return log(`product-${action}`, product, {
       category: product.category,
       stock: product.stock,
@@ -146,60 +255,51 @@ export const useActivityLogger = () => {
     });
   }, [log]);
 
-  const logTransfer = useCallback((action, transfer, additionalData = {}) => {
+  const logTransfer = useCallback((action: string, transfer: Transfer, additionalData: AdditionalData = {}) => {
     return log(`transfer-${action}`, transfer, {
       transferNumber: transfer.transferNumber,
       sourceWarehouse: transfer.sourceWarehouse?.name,
       targetWarehouse: transfer.targetWarehouse?.name,
       sourceWarehouseId: transfer.sourceWarehouseId,
       targetWarehouseId: transfer.targetWarehouseId,
-      productsCount: transfer.products?.length || 0,
-      totalValue: calculateTransferValue(transfer.products),
       status: transfer.status,
-      requestedBy: transfer.requestedBy,
+      transferDate: formatSafeDate(transfer.transferDate),
+      productCount: transfer.productCount,
       ...additionalData
     });
   }, [log]);
 
-  const logFumigation = useCallback((action, fumigation, additionalData = {}) => {
+  const logFumigation = useCallback((action: string, fumigation: Fumigation, additionalData: AdditionalData = {}) => {
     return log(`fumigation-${action}`, fumigation, {
       orderNumber: fumigation.orderNumber,
-      establishment: fumigation.establishment,
       crop: fumigation.crop,
-      surface: fumigation.totalSurface,
-      surfaceUnit: fumigation.surfaceUnit,
-      applicator: fumigation.applicator,
-      applicationDate: formatSafeDate(fumigation.applicationDate),
-      productsUsed: fumigation.selectedProducts?.length || 0,
+      fieldId: fumigation.fieldId,
+      fieldName: fumigation.field?.name,
       status: fumigation.status,
+      applicationDate: formatSafeDate(fumigation.applicationDate),
+      productCount: fumigation.selectedProducts?.length || 0,
       ...additionalData
     });
   }, [log]);
 
-  const logHarvest = useCallback((action, harvest, additionalData = {}) => {
+  const logHarvest = useCallback((action: string, harvest: Harvest, additionalData: AdditionalData = {}) => {
     return log(`harvest-${action}`, harvest, {
-      field: harvest.field?.name,
-      fieldId: harvest.fieldId,
+      harvestNumber: harvest.harvestNumber,
       crop: harvest.crop,
-      area: harvest.totalArea,
-      areaUnit: harvest.areaUnit,
-      estimatedYield: harvest.estimatedYield,
-      actualYield: harvest.actualYield,
-      yieldUnit: harvest.yieldUnit,
-      plannedDate: formatSafeDate(harvest.plannedDate),
-      harvestDate: formatSafeDate(harvest.harvestDate),
+      fieldId: harvest.fieldId,
+      fieldName: harvest.field?.name,
       status: harvest.status,
-      harvestMethod: harvest.harvestMethod,
+      harvestDate: formatSafeDate(harvest.harvestDate),
+      estimatedYield: harvest.estimatedYield,
+      yieldUnit: harvest.yieldUnit,
       ...additionalData
     });
   }, [log]);
 
-  const logPurchase = useCallback((action, purchase, additionalData = {}) => {
+  const logPurchase = useCallback((action: string, purchase: Purchase, additionalData: AdditionalData = {}) => {
     return log(`purchase-${action}`, purchase, {
       purchaseNumber: purchase.purchaseNumber,
       supplier: purchase.supplier,
-      totalAmount: purchase.totalAmount,
-      productsCount: purchase.products?.length || 0,
       status: purchase.status,
       purchaseDate: formatSafeDate(purchase.purchaseDate),
       createdBy: purchase.createdBy,
@@ -208,7 +308,7 @@ export const useActivityLogger = () => {
     });
   }, [log]);
 
-  const logExpense = useCallback((action, expense, additionalData = {}) => {
+  const logExpense = useCallback((action: string, expense: Expense, additionalData: AdditionalData = {}) => {
     return log(`expense-${action}`, expense, {
       expenseNumber: expense.expenseNumber,
       type: expense.type,
@@ -222,7 +322,7 @@ export const useActivityLogger = () => {
     });
   }, [log]);
 
-  const logField = useCallback((action, field, additionalData = {}) => {
+  const logField = useCallback((action: string, field: Field, additionalData: AdditionalData = {}) => {
     return log(`field-${action}`, field, {
       location: field.location,
       area: field.area,
@@ -235,7 +335,7 @@ export const useActivityLogger = () => {
     });
   }, [log]);
 
-  const logWarehouse = useCallback((action, warehouse, additionalData = {}) => {
+  const logWarehouse = useCallback((action: string, warehouse: Warehouse, additionalData: AdditionalData = {}) => {
     return log(`warehouse-${action}`, warehouse, {
       type: warehouse.type,
       location: warehouse.location,
@@ -249,7 +349,7 @@ export const useActivityLogger = () => {
     });
   }, [log]);
 
-  const logUser = useCallback((action, user, additionalData = {}) => {
+  const logUser = useCallback((action: string, user: User, additionalData: AdditionalData = {}) => {
     return log(`user-${action}`, user, {
       username: user.username,
       email: user.email,
@@ -261,7 +361,7 @@ export const useActivityLogger = () => {
   }, [log]);
 
   // Método para registrar actividades del sistema
-  const logSystem = useCallback((action, data = {}, additionalData = {}) => {
+  const logSystem = useCallback((action: string, data: AdditionalData = {}, additionalData: AdditionalData = {}) => {
     return log(`system-${action}`, {
       id: `system-${Date.now()}`,
       name: `Sistema - ${action}`
@@ -272,7 +372,7 @@ export const useActivityLogger = () => {
   }, [log]);
 
   // Métodos de conveniencia para acciones comunes
-  const logBulkAction = useCallback(async (action, entities, additionalData = {}) => {
+  const logBulkAction = useCallback(async (action: string, entities: EntityData[], additionalData: AdditionalData = {}) => {
     try {
       for (const entity of entities) {
         await log(action, entity, {
@@ -286,7 +386,7 @@ export const useActivityLogger = () => {
     }
   }, [log]);
 
-  const logStockMovement = useCallback((product, oldStock, newStock, reason = '') => {
+  const logStockMovement = useCallback((product: Product, oldStock: number, newStock: number, reason: string = '') => {
     const difference = newStock - oldStock;
     const action = difference > 0 ? 'stock-increase' : 'stock-decrease';
     
@@ -299,7 +399,7 @@ export const useActivityLogger = () => {
     });
   }, [logProduct]);
 
-  const logStatusChange = useCallback((entity, entityType, oldStatus, newStatus, reason = '') => {
+  const logStatusChange = useCallback((entity: EntityData, entityType: string, oldStatus: string, newStatus: string, reason: string = '') => {
     return log(`${entityType}-update`, entity, {
       oldStatus,
       newStatus,
@@ -335,7 +435,7 @@ export const useActivityLogger = () => {
 // Funciones auxiliares
 
 // Obtener ID de entidad de manera más robusta
-function getEntityId(entityData) {
+function getEntityId(entityData: EntityData): string {
   return entityData?.id || 
          entityData?._id || 
          entityData?.uid ||
@@ -346,7 +446,7 @@ function getEntityId(entityData) {
          `temp-${Date.now()}`;
 }
 
-function getEntityName(entityData) {
+function getEntityName(entityData: EntityData): string {
   return entityData?.name || 
          entityData?.transferNumber || 
          entityData?.orderNumber || 
@@ -360,72 +460,39 @@ function getEntityName(entityData) {
          'Entidad sin nombre';
 }
 
-// CORREGIDO: Limpiar metadata para evitar valores undefined
-function cleanMetadata(metadata) {
-  const cleaned = {};
+// Limpiar metadata para evitar valores undefined
+function cleanMetadata(metadata: Metadata): Metadata {
+  const cleaned: Metadata = {};
   
-  for (const [key, value] of Object.entries(metadata)) {
-    if (value !== undefined && value !== null && value !== '') {
-      // CORREGIDO: No convertir fechas aquí, dejar que Firebase maneje los timestamps
-      if (value instanceof Date) {
-        cleaned[key] = value.toISOString();
-      } else if (typeof value === 'object' && value.seconds) {
-        // Timestamp de Firebase - convertir a ISO string
-        cleaned[key] = new Date(value.seconds * 1000).toISOString();
-      } else if (typeof value === 'object' && !Array.isArray(value)) {
-        // Objetos anidados - recursivo pero limitado
-        const nestedCleaned = cleanMetadata(value);
-        if (Object.keys(nestedCleaned).length > 0) {
-          cleaned[key] = nestedCleaned;
+  Object.keys(metadata).forEach(key => {
+    const value = metadata[key];
+    if (value !== undefined && value !== null) {
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        const cleanedNested = cleanMetadata(value);
+        if (Object.keys(cleanedNested).length > 0) {
+          cleaned[key] = cleanedNested;
         }
       } else {
         cleaned[key] = value;
       }
     }
-  }
+  });
   
   return cleaned;
 }
 
-function sanitizeEntityData(entityData) {
-  const sensitiveFields = ['password', 'token', 'secret', 'key', 'credential'];
-  const sanitized = { ...entityData };
-  
-  // Eliminar campos sensibles
-  sensitiveFields.forEach(field => {
-    if (sanitized[field]) {
-      delete sanitized[field];
-    }
-  });
-  
-  // Limitar el tamaño del objeto para evitar problemas de almacenamiento
-  const jsonString = JSON.stringify(sanitized);
-  if (jsonString.length > 3000) {
-    return {
-      id: getEntityId(sanitized),
-      name: getEntityName(sanitized),
-      type: sanitized.type || sanitized.category,
-      note: 'Datos truncados por tamaño'
-    };
-  }
-  
-  return cleanMetadata(sanitized);
+// Sanitizar datos de entidad para evitar información sensible
+function sanitizeEntityData(entityData: EntityData): Partial<EntityData> {
+  const { password, token, secret, apiKey, ...sanitized } = entityData;
+  return sanitized;
 }
 
-function calculateTransferValue(products = []) {
-  return products.reduce((total, product) => {
-    const quantity = product.quantity || 0;
-    const cost = product.cost || product.unitCost || 0;
-    return total + (quantity * cost);
-  }, 0);
-}
-
-// CORREGIDO: Función para formatear fechas de manera completamente segura
-function formatSafeDate(dateInput) {
+// Formatear fechas de manera completamente segura
+function formatSafeDate(dateInput: any): string | null {
   try {
     if (!dateInput) return null;
     
-    let date;
+    let date: Date;
     
     if (dateInput instanceof Date) {
       date = dateInput;
@@ -459,7 +526,7 @@ function formatSafeDate(dateInput) {
   }
 }
 
-function generateDescription(action, entityData, additionalData) {
+function generateDescription(action: string, entityData: EntityData, additionalData: AdditionalData): string {
   const [entity, actionType] = action.split('-');
   
   try {
@@ -482,118 +549,89 @@ function generateDescription(action, entityData, additionalData) {
         return generateWarehouseDescription(actionType, entityData, additionalData);
       case 'user':
         return generateUserDescription(actionType, entityData, additionalData);
+      case 'system':
+        return `Sistema - ${actionType}`;
       default:
-        return actionDescriptions[action] || `${actionType} ${entity}`;
+        return `${actionType} ${entity} "${getEntityName(entityData)}"`;
     }
   } catch (error) {
-    console.warn('Error generando descripción:', error);
-    return actionDescriptions[action] || `${actionType} ${entity}`;
+    console.warn('Error al generar descripción:', error);
+    return `${actionType} ${entity}`;
   }
 }
 
-function generateProductDescription(actionType, product, data) {
+function generateProductDescription(actionType: string, product: EntityData, data: AdditionalData): string {
   const name = product.name || 'producto';
   
   switch (actionType) {
     case 'create':
-      return `Creó el producto "${name}" en la categoría ${data.category || 'sin categoría'} con stock inicial de ${data.initialStock || data.stock || 0} ${data.unit || 'unidades'}`;
-    case 'update':
-      if (data.changes && data.changes.length > 0) {
-        const changesList = data.changes.map(change => {
-          switch (change.type) {
-            case 'increase':
-              return `${change.label}: ${change.oldValue} → ${change.newValue} ⬆️`;
-            case 'decrease':
-              return `${change.label}: ${change.oldValue} → ${change.newValue} ⬇️`;
-            case 'location':
-              return `${change.label}: ${change.oldValue} → ${change.newValue} 📍`;
-            default:
-              return `${change.label}: ${change.oldValue} → ${change.newValue}`;
-          }
-        }).join(', ');
-        
-        return `Actualizó "${name}" - Cambios: ${changesList}`;
-      }
-      return `Actualizó el producto "${name}" - Stock actual: ${data.stock || 0} ${data.unit || 'unidades'}`;
-    case 'delete':
-      return `Eliminó el producto "${name}" de la categoría ${data.category || 'sin categoría'}${data.finalStock ? ` (stock final: ${data.finalStock} ${data.unit || 'unidades'})` : ''}`;
+      return `Creó producto "${name}" en ${data.category || 'categoría general'}`;
     case 'stock-adjust':
-      const movement = data.difference > 0 ? 'aumentó' : 'disminuyó';
-      return `${movement.charAt(0).toUpperCase() + movement.slice(1)} el stock de "${name}" en ${Math.abs(data.difference || 0)} ${data.unit || 'unidades'}. ${data.reason ? `Razón: ${data.reason}` : ''}`;
+      const movementType = data.movementType === 'stock-increase' ? 'aumentó' : 'redujo';
+      return `${movementType.charAt(0).toUpperCase() + movementType.slice(1)} stock de "${name}" en ${data.difference || 0} ${data.unit || 'unidades'}`;
+    case 'update':
+      return `Actualizó producto "${name}"`;
     default:
       return `${actionType} producto "${name}"`;
   }
 }
 
-function generateTransferDescription(actionType, transfer, data) {
-  const number = data.transferNumber || transfer.transferNumber || transfer.id?.substring(0, 8) || 'S/N';
+function generateTransferDescription(actionType: string, transfer: EntityData, data: AdditionalData): string {
+  const transferNumber = transfer.transferNumber || 'transferencia';
   
   switch (actionType) {
     case 'create':
-      return `Creó transferencia ${number} de ${data.sourceWarehouse || 'origen'} hacia ${data.targetWarehouse || 'destino'} con ${data.productsCount || 0} productos`;
-    case 'approve':
-      return `Aprobó la transferencia ${number}`;
-    case 'reject':
-      return `Rechazó la transferencia ${number}${data.reason ? `. Motivo: ${data.reason}` : ''}`;
-    case 'ship':
-      return `Envió la transferencia ${number} desde ${data.sourceWarehouse || 'origen'}`;
-    case 'receive':
-      return `Recibió la transferencia ${number} en ${data.targetWarehouse || 'destino'}`;
-    case 'cancel':
-      return `Canceló la transferencia ${number}${data.reason ? `. Motivo: ${data.reason}` : ''}`;
-    default:
-      return `${actionType} transferencia ${number}`;
-  }
-}
-
-function generateFumigationDescription(actionType, fumigation, data) {
-  const order = data.orderNumber || fumigation.orderNumber || fumigation.id?.substring(0, 8) || 'S/N';
-  
-  switch (actionType) {
-    case 'create':
-      return `Programó fumigación ${order} para ${data.establishment || 'establecimiento'} - ${data.crop || 'cultivo'} (${data.surface || 0} ${data.surfaceUnit || 'ha'})`;
+      return `Creó ${transferNumber} de ${data.sourceWarehouse || 'origen'} a ${data.targetWarehouse || 'destino'}`;
     case 'complete':
-      return `Completó fumigación ${order} en ${data.surface || 0} ${data.surfaceUnit || 'ha'} aplicada por ${data.applicator || 'aplicador no especificado'}`;
+      return `Completó ${transferNumber}`;
     case 'cancel':
-      return `Canceló fumigación ${order}${data.reason ? `. Motivo: ${data.reason}` : ''}`;
+      return `Canceló ${transferNumber}`;
     default:
-      return `${actionType} fumigación ${order}`;
+      return `${actionType} ${transferNumber}`;
   }
 }
 
-function generateHarvestDescription(actionType, harvest, data) {
-  const crop = data.crop || harvest.crop || 'cultivo';
-  const field = data.field || harvest.field?.name || 'campo';
+function generateFumigationDescription(actionType: string, fumigation: EntityData, data: AdditionalData): string {
+  const orderNumber = fumigation.orderNumber || 'fumigación';
   
   switch (actionType) {
     case 'create':
-      return `Programó cosecha de ${crop} en ${field} (${data.area || 0} ${data.areaUnit || 'ha'})`;
+      return `Creó ${orderNumber} para ${data.crop || 'cultivo'} en ${data.fieldName || 'campo'}`;
     case 'complete':
-      return `Completó cosecha de ${crop} en ${field} - Rendimiento: ${data.actualYield || 0} ${data.yieldUnit || 'kg/ha'}`;
-    case 'cancel':
-      return `Canceló cosecha de ${crop} en ${field}`;
+      return `Completó fumigación ${orderNumber}`;
     default:
-      return `${actionType} cosecha de ${crop}`;
+      return `${actionType} fumigación ${orderNumber}`;
   }
 }
 
-function generatePurchaseDescription(actionType, purchase, data) {
-  const number = data.purchaseNumber || purchase.purchaseNumber || 'S/N';
+function generateHarvestDescription(actionType: string, harvest: EntityData, data: AdditionalData): string {
+  const harvestNumber = harvest.harvestNumber || 'cosecha';
   
   switch (actionType) {
     case 'create':
-      return `Registró compra ${number} a ${data.supplier || 'proveedor'} por ${(data.totalAmount || 0).toLocaleString()}`;
-    case 'delivery-create':
-      return `Creó entrega para compra ${number}`;
-    case 'delivery-complete':
-      return `Completó entrega de compra ${number}`;
+      return `Creó ${harvestNumber} de ${data.crop || 'cultivo'} en ${data.fieldName || 'campo'}`;
+    case 'complete':
+      return `Completó cosecha ${harvestNumber}`;
     default:
-      return `${actionType} compra ${number}`;
+      return `${actionType} cosecha ${harvestNumber}`;
   }
 }
 
-function generateExpenseDescription(actionType, expense, data) {
-  const number = data.expenseNumber || expense.expenseNumber || 'S/N';
+function generatePurchaseDescription(actionType: string, purchase: EntityData, data: AdditionalData): string {
+  const purchaseNumber = purchase.purchaseNumber || 'compra';
+  
+  switch (actionType) {
+    case 'create':
+      return `Creó ${purchaseNumber} a ${data.supplier || 'proveedor'}`;
+    case 'delivery-add':
+      return `Añadió entrega a ${purchaseNumber}`;
+    default:
+      return `${actionType} compra ${purchaseNumber}`;
+  }
+}
+
+function generateExpenseDescription(actionType: string, expense: EntityData, data: AdditionalData): string {
+  const number = expense.expenseNumber || 'gasto';
   
   switch (actionType) {
     case 'create':
@@ -604,7 +642,7 @@ function generateExpenseDescription(actionType, expense, data) {
   }
 }
 
-function generateFieldDescription(actionType, field, data) {
+function generateFieldDescription(actionType: string, field: EntityData, data: AdditionalData): string {
   const name = field.name || 'campo';
   
   switch (actionType) {
@@ -617,7 +655,7 @@ function generateFieldDescription(actionType, field, data) {
   }
 }
 
-function generateWarehouseDescription(actionType, warehouse, data) {
+function generateWarehouseDescription(actionType: string, warehouse: EntityData, data: AdditionalData): string {
   const name = warehouse.name || 'almacén';
   
   switch (actionType) {
@@ -632,7 +670,7 @@ function generateWarehouseDescription(actionType, warehouse, data) {
   }
 }
 
-function generateUserDescription(actionType, user, data) {
+function generateUserDescription(actionType: string, user: EntityData, data: AdditionalData): string {
   const name = user.displayName || user.username || user.email || 'usuario';
   
   switch (actionType) {
