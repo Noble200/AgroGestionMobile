@@ -1,0 +1,332 @@
+/* theme/agrogestion.css - Tema personalizado para AgroGestión */
+
+/* Variables de colores principales */
+:root {
+  /* Colores de AgroGestión */
+  --agro-primary: #4CAF50;
+  --agro-primary-dark: #388E3C;
+  --agro-primary-light: #A5D6A7;
+  --agro-primary-bg: #E8F5E9;
+  
+  --agro-secondary: #2196F3;
+  --agro-success: #4CAF50;
+  --agro-warning: #FF9800;
+  --agro-danger: #F44336;
+  --agro-info: #2196F3;
+  
+  /* Sobreescribir variables de Ionic */
+  --ion-color-primary: #4CAF50;
+  --ion-color-primary-rgb: 76, 175, 80;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #42a047;
+  --ion-color-primary-tint: #66bb6a;
+  
+  --ion-color-secondary: #2196F3;
+  --ion-color-secondary-rgb: 33, 150, 243;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #1e88e5;
+  --ion-color-secondary-tint: #42a5f5;
+  
+  /* Colores adicionales */
+  --ion-color-success: #4CAF50;
+  --ion-color-success-rgb: 76, 175, 80;
+  --ion-color-success-contrast: #ffffff;
+  --ion-color-success-contrast-rgb: 255, 255, 255;
+  --ion-color-success-shade: #42a047;
+  --ion-color-success-tint: #66bb6a;
+  
+  --ion-color-warning: #FF9800;
+  --ion-color-warning-rgb: 255, 152, 0;
+  --ion-color-warning-contrast: #ffffff;
+  --ion-color-warning-contrast-rgb: 255, 255, 255;
+  --ion-color-warning-shade: #f57c00;
+  --ion-color-warning-tint: #ffb74d;
+  
+  --ion-color-danger: #F44336;
+  --ion-color-danger-rgb: 244, 67, 54;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #e53935;
+  --ion-color-danger-tint: #ef5350;
+}
+
+/* Estilos para el Tab Bar */
+.agrogestion-tab-bar {
+  --background: #ffffff;
+  --border: 1px solid #e0e0e0;
+  --color: #757575;
+  --color-selected: var(--agro-primary);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.agrogestion-tab-bar ion-tab-button {
+  --color: #757575;
+  --color-selected: var(--agro-primary);
+  --ripple-color: var(--agro-primary-light);
+}
+
+.agrogestion-tab-bar ion-tab-button.tab-selected {
+  --color: var(--agro-primary);
+}
+
+.agrogestion-tab-bar ion-tab-button.tab-selected ion-icon {
+  color: var(--agro-primary);
+}
+
+.agrogestion-tab-bar ion-tab-button.tab-selected ion-label {
+  color: var(--agro-primary);
+  font-weight: 600;
+}
+
+/* Estilos globales de la aplicación */
+.agrogestion-page {
+  --background: #f8f9fa;
+}
+
+.agrogestion-header {
+  --background: var(--agro-primary);
+  --color: white;
+  --border-color: var(--agro-primary-dark);
+}
+
+.agrogestion-header ion-title {
+  color: white;
+  font-weight: 600;
+}
+
+.agrogestion-header ion-button {
+  --color: white;
+  --background: transparent;
+  --background-hover: rgba(255, 255, 255, 0.1);
+  --background-activated: rgba(255, 255, 255, 0.2);
+}
+
+/* Tarjetas de estadísticas */
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  margin: 8px;
+  border-left: 4px solid var(--agro-primary);
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card.warning {
+  border-left-color: var(--agro-warning);
+}
+
+.stat-card.danger {
+  border-left-color: var(--agro-danger);
+}
+
+.stat-card.info {
+  border-left-color: var(--agro-info);
+}
+
+/* Lista de elementos */
+.item-list {
+  background: white;
+  border-radius: 12px;
+  margin: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.item-list-header {
+  background: #f5f5f5;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--agro-primary);
+}
+
+.item-list-header ion-icon {
+  margin-right: 8px;
+  color: var(--agro-primary);
+}
+
+.list-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.list-item:hover {
+  background-color: #f8f9fa;
+}
+
+/* Badges de urgencia */
+.urgency-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  min-width: 60px;
+}
+
+.urgency-badge.today {
+  background-color: #ffebee;
+  color: var(--agro-danger);
+  border: 1px solid #ffcdd2;
+}
+
+.urgency-badge.urgent {
+  background-color: #fff3e0;
+  color: var(--agro-warning);
+  border: 1px solid #ffcc02;
+}
+
+.urgency-badge.normal {
+  background-color: #e3f2fd;
+  color: var(--agro-info);
+  border: 1px solid #bbdefb;
+}
+
+/* Botones personalizados */
+.agro-button {
+  --background: var(--agro-primary);
+  --background-hover: var(--agro-primary-dark);
+  --background-activated: var(--agro-primary-dark);
+  --color: white;
+  --border-radius: 8px;
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --min-height: 44px;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.agro-button.secondary {
+  --background: transparent;
+  --color: var(--agro-primary);
+  --border-color: var(--agro-primary);
+  --border-style: solid;
+  --border-width: 2px;
+}
+
+.agro-button.secondary:hover {
+  --background: var(--agro-primary-bg);
+}
+
+/* Estados de carga */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  color: #666;
+}
+
+.loading-spinner {
+  --color: var(--agro-primary);
+  margin-bottom: 16px;
+}
+
+/* Estados vacíos */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: #666;
+}
+
+.empty-state ion-icon {
+  font-size: 64px;
+  color: #ccc;
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.empty-state p {
+  margin: 0 0 24px 0;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stat-card {
+    margin: 4px;
+    padding: 12px;
+  }
+  
+  .item-list {
+    margin: 4px;
+  }
+  
+  .list-item {
+    padding: 10px 12px;
+  }
+  
+  .agrogestion-tab-bar ion-label {
+    font-size: 12px;
+  }
+}
+
+/* Animaciones */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .stat-card {
+    background: #1e1e1e;
+    color: #ffffff;
+  }
+  
+  .item-list {
+    background: #1e1e1e;
+  }
+  
+  .item-list-header {
+    background: #2a2a2a;
+    color: var(--agro-primary-light);
+  }
+  
+  .list-item {
+    color: #ffffff;
+    border-bottom-color: #333;
+  }
+  
+  .list-item:hover {
+    background-color: #2a2a2a;
+  }
+}

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">agrogestion-mobile</string>
-    <string name="title_activity_main">agrogestion-mobile</string>
-    <string name="package_name">io.ionic.starter</string>
-    <string name="custom_url_scheme">io.ionic.starter</string>
+    <string name="app_name">AgroGestión</string>
+    <string name="title_activity_main">AgroGestión</string>
+    <string name="package_name">com.agrogestion.mobile</string>
+    <string name="custom_url_scheme">com.agrogestion.mobile</string>
 </resources>
