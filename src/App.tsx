@@ -15,7 +15,8 @@ import {
   cube, 
   swapHorizontal, 
   leaf, 
-  people 
+  people,
+  receipt
 } from 'ionicons/icons';
 
 // Páginas de AgroGestión
@@ -24,6 +25,7 @@ import ProductsPage from './pages/ProductsPage';
 import TransfersPage from './pages/TransfersPage';
 import FieldsPage from './pages/FieldsPage';
 import UsersPage from './pages/UsersPage';
+import ExpensesPage from './pages/ExpensesPage'; // ← AGREGAR ESTA IMPORTACIÓN
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -68,6 +70,11 @@ const App: React.FC = () => (
             <UsersPage />
           </Route>
           
+          {/* ← AGREGAR ESTA RUTA PARA GASTOS */}
+          <Route exact path="/gastos">
+            <ExpensesPage />
+          </Route>
+          
           {/* Ruta por defecto */}
           <Route exact path="/">
             <Redirect to="/dashboard" />
@@ -75,30 +82,31 @@ const App: React.FC = () => (
         </IonRouterOutlet>
         
         {/* Tab Bar con las opciones principales */}
-        <IonTabBar slot="bottom" className="agrogestion-tab-bar">
+        <IonTabBar slot="bottom" className="agro-tab-bar">
           <IonTabButton tab="dashboard" href="/dashboard">
-            <IonIcon aria-hidden="true" icon={home} />
+            <IonIcon icon={home} />
             <IonLabel>Dashboard</IonLabel>
           </IonTabButton>
           
           <IonTabButton tab="productos" href="/productos">
-            <IonIcon aria-hidden="true" icon={cube} />
+            <IonIcon icon={cube} />
             <IonLabel>Productos</IonLabel>
           </IonTabButton>
           
           <IonTabButton tab="transferencias" href="/transferencias">
-            <IonIcon aria-hidden="true" icon={swapHorizontal} />
+            <IonIcon icon={swapHorizontal} />
             <IonLabel>Transferencias</IonLabel>
           </IonTabButton>
           
           <IonTabButton tab="campos" href="/campos">
-            <IonIcon aria-hidden="true" icon={leaf} />
+            <IonIcon icon={leaf} />
             <IonLabel>Campos</IonLabel>
           </IonTabButton>
           
-          <IonTabButton tab="usuarios" href="/usuarios">
-            <IonIcon aria-hidden="true" icon={people} />
-            <IonLabel>Usuarios</IonLabel>
+          {/* ← OPCIONAL: Agregar gastos al tab bar también */}
+          <IonTabButton tab="gastos" href="/gastos">
+            <IonIcon icon={receipt} />
+            <IonLabel>Gastos</IonLabel>
           </IonTabButton>
         </IonTabBar>
       </IonTabs>

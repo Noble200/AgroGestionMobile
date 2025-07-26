@@ -82,6 +82,17 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
+  // Formatear fecha para input de tipo date
+  const formatDateForInput = (date: any): string => {
+    if (!date) return new Date().toISOString();
+    
+    const d = date.seconds
+      ? new Date(date.seconds * 1000)
+      : new Date(date);
+    
+    return d.toISOString();
+  };
+
   // Cargar datos del gasto si estamos editando
   useEffect(() => {
     if (expense && !isNew) {
@@ -117,17 +128,6 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
       }));
     }
   }, [expense, isNew, products]);
-
-  // Formatear fecha para input de tipo date
-  const formatDateForInput = (date: any): string => {
-    if (!date) return '';
-    
-    const d = date.seconds
-      ? new Date(date.seconds * 1000)
-      : new Date(date);
-    
-    return d.toISOString();
-  };
 
   // Manejar cambios en el formulario
   const handleChange = (field: string, value: any) => {
@@ -168,42 +168,45 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
       const product = products.find(p => p.id === value);
       setSelectedProduct(product || null);
       
-      // Si selecciona un producto, limpiar campos de cantidad y precio
       if (product) {
         setFormData(prev => ({
           ...prev,
           productId: value,
-          quantitySold: '',
-          unitPrice: '',
-          totalAmount: ''
+          unitPrice: product.price ? String(product.price) : '',
+          productName: product.name || '',
+          productCategory: product.category || ''
         }));
       }
     }
-  };
-
-  // Manejar cambios en cantidad o precio unitario (cálculo automático)
-  const handleQuantityOrPriceChange = (field: string, value: string) => {
-    setFormData(prev => {
-      const newData = { ...prev, [field]: value };
-      
-      // Calcular automáticamente el total
-      const quantity = parseFloat(newData.quantitySold) || 0;
-      const unitPrice = parseFloat(newData.unitPrice) || 0;
-      
-      if (quantity > 0 && unitPrice > 0) {
-        newData.totalAmount = (quantity * unitPrice).toFixed(2);
-      } else if (field === 'totalAmount' && quantity > 0) {
-        // Si se modifica el total, calcular precio unitario
-        const total = parseFloat(value) || 0;
-        newData.unitPrice = total > 0 ? (total / quantity).toFixed(2) : '';
-      }
-      
-      return newData;
-    });
     
-    // Limpiar errores
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+    // Calcular total automáticamente
+    if (field === 'quantitySold' || field === 'unitPrice') {
+      setFormData(prev => {
+        const newData = { ...prev, [field]: value };
+        const quantity = parseFloat(newData.quantitySold) || 0;
+        const price = parseFloat(newData.unitPrice) || 0;
+        const total = quantity * price;
+        
+        return {
+          ...newData,
+          totalAmount: total > 0 ? String(total.toFixed(2)) : ''
+        };
+      });
+    }
+    
+    // Calcular precio unitario si se modifica el total
+    if (field === 'totalAmount' && formData.quantitySold) {
+      setFormData(prev => {
+        const newData = { ...prev, [field]: value };
+        const total = parseFloat(newData.totalAmount) || 0;
+        const quantity = parseFloat(newData.quantitySold) || 0;
+        
+        if (quantity > 0) {
+          newData.unitPrice = total > 0 ? (total / quantity).toFixed(2) : '';
+        }
+        
+        return newData;
+      });
     }
   };
 
@@ -278,26 +281,41 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
           ...(formData.type === 'product' ? {
             quantitySold: parseFloat(formData.quantitySold) || 0,
             unitPrice: parseFloat(formData.unitPrice) || 0,
-            totalAmount: parseFloat(formData.totalAmount) || 0
+            totalAmount: parseFloat(formData.totalAmount) || 0,
+            productName: selectedProduct?.name || '',
+            productCategory: selectedProduct?.category || ''
           } : {
             amount: parseFloat(formData.amount) || 0
-          })
+          }),
+          // Convertir fecha
+          date: new Date(formData.date)
         };
         
-        // Convertir fecha
-        if (expenseData.date) {
-expenseData.date = new Date(expenseData.date as string).toISOString();
+        const success = await onSave(expenseData);
+        
+        if (success) {
+          onClose();
         }
         
-        // Llamar a onSave - devuelve Promise<boolean> según el controlador
-        await onSave(expenseData);
       } catch (error) {
-        console.error("Error al guardar gasto:", error);
+        console.error('Error al guardar gasto:', error);
       } finally {
         setSubmitting(false);
       }
     }
   };
+
+  // Categorías predefinidas para gastos varios
+  const miscCategories = [
+    'Combustible',
+    'Mantenimiento',
+    'Seguros',
+    'Servicios',
+    'Suministros',
+    'Transporte',
+    'Personal',
+    'Otros'
+  ];
 
   return (
     <IonModal isOpen={isOpen} onDidDismiss={onClose}>
@@ -319,58 +337,34 @@ expenseData.date = new Date(expenseData.date as string).toISOString();
           
           {/* Selector de tipo de gasto */}
           <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
-            <IonCardHeader>
-              <IonCardTitle style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <IonIcon icon={pricetag} />
+            <IonCardHeader style={{ paddingBottom: '10px' }}>
+              <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-primary)' }}>
                 Tipo de gasto
               </IonCardTitle>
             </IonCardHeader>
             <IonCardContent>
-              <IonSegment 
-                value={formData.type} 
-                onIonChange={(e) => handleChange('type', e.detail.value)}
-                style={{ '--background': '#f8fafc' }}
+              <IonSegment
+                value={formData.type}
+                onIonChange={e => handleChange('type', e.detail.value)}
+                style={{ '--background': '#f8f9fa' }}
               >
                 <IonSegmentButton value="product">
-                  <div style={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '12px 8px'
-                  }}>
-                    <IonIcon icon={storefront} style={{ fontSize: '24px' }} />
-                    <IonLabel>Venta de producto</IonLabel>
-                  </div>
+                  <IonIcon icon={storefront} />
+                  <IonLabel>Venta de producto</IonLabel>
                 </IonSegmentButton>
-                
                 <IonSegmentButton value="misc">
-                  <div style={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '12px 8px'
-                  }}>
-                    <IonIcon icon={receipt} style={{ fontSize: '24px' }} />
-                    <IonLabel>Gasto varios</IonLabel>
-                  </div>
+                  <IonIcon icon={receipt} />
+                  <IonLabel>Gasto varios</IonLabel>
                 </IonSegmentButton>
               </IonSegment>
-              
-              {errors.type && (
-                <IonText color="danger" style={{ fontSize: '14px', marginTop: '8px', display: 'block' }}>
-                  {errors.type}
-                </IonText>
-              )}
             </IonCardContent>
           </IonCard>
 
           {/* Información básica */}
           <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
-            <IonCardHeader>
-              <IonCardTitle style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <IonIcon icon={informationCircle} />
+            <IonCardHeader style={{ paddingBottom: '10px' }}>
+              <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-primary)' }}>
+                <IonIcon icon={informationCircle} style={{ marginRight: '8px' }} />
                 Información básica
               </IonCardTitle>
             </IonCardHeader>
@@ -378,17 +372,27 @@ expenseData.date = new Date(expenseData.date as string).toISOString();
               <IonGrid>
                 <IonRow>
                   <IonCol size="12" sizeMd="6">
-                    <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px' }}>
+                    <IonItem>
+                      <IonLabel position="stacked">Número de gasto</IonLabel>
+                      <IonInput
+                        placeholder="Se generará automáticamente"
+                        value={formData.expenseNumber}
+                        onIonInput={e => handleChange('expenseNumber', e.detail.value!)}
+                      />
+                    </IonItem>
+                  </IonCol>
+                  <IonCol size="12" sizeMd="6">
+                    <IonItem>
                       <IonLabel position="stacked">Fecha *</IonLabel>
                       <IonDatetime
                         value={formData.date}
-                        onIonChange={(e) => handleChange('date', e.detail.value)}
+                        onIonChange={e => handleChange('date', e.detail.value!)}
                         presentation="date"
                         style={{ width: '100%' }}
                       />
                     </IonItem>
                     {errors.date && (
-                      <IonText color="danger" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                      <IonText color="danger" style={{ fontSize: '12px', marginLeft: '16px' }}>
                         {errors.date}
                       </IonText>
                     )}
@@ -398,136 +402,104 @@ expenseData.date = new Date(expenseData.date as string).toISOString();
             </IonCardContent>
           </IonCard>
 
-          {/* Datos específicos según el tipo */}
-          {formData.type === 'product' ? (
+          {/* Formulario para gastos de productos */}
+          {formData.type === 'product' && (
             <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
-              <IonCardHeader>
-                <IonCardTitle style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <IonIcon icon={storefront} />
-                  Venta de producto
+              <IonCardHeader style={{ paddingBottom: '10px' }}>
+                <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-success)' }}>
+                  <IonIcon icon={storefront} style={{ marginRight: '8px' }} />
+                  Detalles de venta
                 </IonCardTitle>
               </IonCardHeader>
               <IonCardContent>
                 <IonGrid>
                   <IonRow>
-                    {/* Selección de producto */}
                     <IonCol size="12">
-                      <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px', marginBottom: '16px' }}>
+                      <IonItem>
                         <IonLabel position="stacked">Producto *</IonLabel>
                         <IonSelect
                           value={formData.productId}
-                          onIonChange={(e) => handleChange('productId', e.detail.value)}
-                          placeholder="Seleccionar producto..."
-                          interface="popover"
+                          onIonChange={e => handleChange('productId', e.detail.value)}
+                          placeholder="Seleccionar producto"
                         >
-                          {getAvailableProducts().map((product) => (
+                          {getAvailableProducts().map(product => (
                             <IonSelectOption key={product.id} value={product.id}>
-                              {product.name} (Stock: {product.stock} {product.unit})
+                              {product.name} (Stock: {product.stock})
                             </IonSelectOption>
                           ))}
                         </IonSelect>
                       </IonItem>
                       {errors.productId && (
-                        <IonText color="danger" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        <IonText color="danger" style={{ fontSize: '12px', marginLeft: '16px' }}>
                           {errors.productId}
                         </IonText>
                       )}
                     </IonCol>
-
-                    {/* Información del producto seleccionado */}
-                    {selectedProduct && (
-                      <IonCol size="12">
-                        <div style={{
-                          background: 'rgba(var(--ion-color-success-rgb), 0.1)',
-                          border: '1px solid var(--ion-color-success)',
-                          borderRadius: '12px',
-                          padding: '16px',
-                          marginBottom: '16px'
-                        }}>
-                          <h4 style={{ 
-                            margin: '0 0 8px 0', 
-                            color: 'var(--ion-color-success)',
-                            fontSize: '16px',
-                            fontWeight: '600'
-                          }}>
-                            Información del producto
-                          </h4>
-                          <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                            <strong>Categoría:</strong> {selectedProduct.category}
-                          </p>
-                          <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                            <strong>Stock disponible:</strong> {selectedProduct.stock} {selectedProduct.unit}
-                          </p>
-                          {selectedProduct.cost && (
-                            <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                              <strong>Costo unitario:</strong> ${selectedProduct.cost}
-                            </p>
-                          )}
-                        </div>
-                      </IonCol>
-                    )}
-
-                    {/* Cantidad y precios */}
+                  </IonRow>
+                  
+                  <IonRow>
                     <IonCol size="12" sizeMd="4">
-                      <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px' }}>
+                      <IonItem>
                         <IonLabel position="stacked">Cantidad vendida *</IonLabel>
                         <IonInput
                           type="number"
-                          value={formData.quantitySold}
-                          onIonInput={(e) => handleQuantityOrPriceChange('quantitySold', e.detail.value!)}
-                          placeholder="Cantidad"
                           min="0"
                           step="0.01"
-                          disabled={!selectedProduct}
+                          placeholder="0"
+                          value={formData.quantitySold}
+                          onIonInput={e => handleChange('quantitySold', e.detail.value!)}
                         />
                       </IonItem>
                       {errors.quantitySold && (
-                        <IonText color="danger" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        <IonText color="danger" style={{ fontSize: '12px', marginLeft: '16px' }}>
                           {errors.quantitySold}
                         </IonText>
                       )}
                     </IonCol>
-
+                    
                     <IonCol size="12" sizeMd="4">
-                      <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px' }}>
+                      <IonItem>
                         <IonLabel position="stacked">Precio unitario *</IonLabel>
                         <IonInput
                           type="number"
-                          value={formData.unitPrice}
-                          onIonInput={(e) => handleQuantityOrPriceChange('unitPrice', e.detail.value!)}
-                          placeholder="Precio por unidad"
                           min="0"
                           step="0.01"
+                          placeholder="0.00"
+                          value={formData.unitPrice}
+                          onIonInput={e => handleChange('unitPrice', e.detail.value!)}
                         />
                       </IonItem>
                       {errors.unitPrice && (
-                        <IonText color="danger" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        <IonText color="danger" style={{ fontSize: '12px', marginLeft: '16px' }}>
                           {errors.unitPrice}
                         </IonText>
                       )}
                     </IonCol>
-
+                    
                     <IonCol size="12" sizeMd="4">
-                      <IonItem lines="none" style={{ '--background': '#e8f5e8', '--border-radius': '12px' }}>
+                      <IonItem>
                         <IonLabel position="stacked">Total</IonLabel>
                         <IonInput
                           type="number"
-                          value={formData.totalAmount}
-                          onIonInput={(e) => handleQuantityOrPriceChange('totalAmount', e.detail.value!)}
-                          placeholder="Total calculado"
                           min="0"
                           step="0.01"
+                          placeholder="0.00"
+                          value={formData.totalAmount}
+                          onIonInput={e => handleChange('totalAmount', e.detail.value!)}
                         />
                       </IonItem>
                     </IonCol>
-
+                  </IonRow>
+                  
+                  <IonRow>
                     <IonCol size="12">
-                      <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px' }}>
+                      <IonItem>
                         <IonLabel position="stacked">Motivo de la venta</IonLabel>
-                        <IonInput
+                        <IonTextarea
+                          placeholder="Descripción del motivo de venta..."
                           value={formData.saleReason}
-                          onIonInput={(e) => handleChange('saleReason', e.detail.value!)}
-                          placeholder="Ej: Venta al cliente Juan Pérez"
+                          onIonInput={e => handleChange('saleReason', e.detail.value!)}
+                          rows={3}
                         />
                       </IonItem>
                     </IonCol>
@@ -535,80 +507,84 @@ expenseData.date = new Date(expenseData.date as string).toISOString();
                 </IonGrid>
               </IonCardContent>
             </IonCard>
-          ) : (
+          )}
+
+          {/* Formulario para gastos varios */}
+          {formData.type === 'misc' && (
             <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
-              <IonCardHeader>
-                <IonCardTitle style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <IonIcon icon={receipt} />
-                  Gasto varios
+              <IonCardHeader style={{ paddingBottom: '10px' }}>
+                <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-warning)' }}>
+                  <IonIcon icon={receipt} style={{ marginRight: '8px' }} />
+                  Detalles del gasto
                 </IonCardTitle>
               </IonCardHeader>
               <IonCardContent>
                 <IonGrid>
                   <IonRow>
-                    <IonCol size="12">
-                      <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px', marginBottom: '16px' }}>
-                        <IonLabel position="stacked">Descripción *</IonLabel>
-                        <IonInput
-                          value={formData.description}
-                          onIonInput={(e) => handleChange('description', e.detail.value!)}
-                          placeholder="Descripción del gasto"
-                        />
-                      </IonItem>
-                      {errors.description && (
-                        <IonText color="danger" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                          {errors.description}
-                        </IonText>
-                      )}
-                    </IonCol>
-
                     <IonCol size="12" sizeMd="6">
-                      <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px' }}>
-                        <IonLabel position="stacked">Categoría</IonLabel>
+                      <IonItem>
+                        <IonLabel position="stacked">Categoría *</IonLabel>
                         <IonSelect
                           value={formData.category}
-                          onIonChange={(e) => handleChange('category', e.detail.value)}
-                          placeholder="Seleccionar categoría..."
-                          interface="popover"
+                          onIonChange={e => handleChange('category', e.detail.value)}
+                          placeholder="Seleccionar categoría"
                         >
-                          <IonSelectOption value="combustible">Combustible</IonSelectOption>
-                          <IonSelectOption value="mantenimiento">Mantenimiento</IonSelectOption>
-                          <IonSelectOption value="servicios">Servicios</IonSelectOption>
-                          <IonSelectOption value="administrativo">Administrativo</IonSelectOption>
-                          <IonSelectOption value="impuestos">Impuestos</IonSelectOption>
-                          <IonSelectOption value="personal">Personal</IonSelectOption>
-                          <IonSelectOption value="transporte">Transporte</IonSelectOption>
-                          <IonSelectOption value="otros">Otros</IonSelectOption>
+                          {miscCategories.map(category => (
+                            <IonSelectOption key={category} value={category}>
+                              {category}
+                            </IonSelectOption>
+                          ))}
                         </IonSelect>
                       </IonItem>
                     </IonCol>
-
+                    
                     <IonCol size="12" sizeMd="6">
-                      <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px' }}>
+                      <IonItem>
                         <IonLabel position="stacked">Importe *</IonLabel>
                         <IonInput
                           type="number"
-                          value={formData.amount}
-                          onIonInput={(e) => handleChange('amount', e.detail.value!)}
-                          placeholder="Importe del gasto"
                           min="0"
                           step="0.01"
+                          placeholder="0.00"
+                          value={formData.amount}
+                          onIonInput={e => handleChange('amount', e.detail.value!)}
                         />
                       </IonItem>
                       {errors.amount && (
-                        <IonText color="danger" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        <IonText color="danger" style={{ fontSize: '12px', marginLeft: '16px' }}>
                           {errors.amount}
                         </IonText>
                       )}
                     </IonCol>
-
+                  </IonRow>
+                  
+                  <IonRow>
                     <IonCol size="12">
-                      <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px' }}>
+                      <IonItem>
+                        <IonLabel position="stacked">Descripción *</IonLabel>
+                        <IonTextarea
+                          placeholder="Descripción detallada del gasto..."
+                          value={formData.description}
+                          onIonInput={e => handleChange('description', e.detail.value!)}
+                          rows={3}
+                        />
+                      </IonItem>
+                      {errors.description && (
+                        <IonText color="danger" style={{ fontSize: '12px', marginLeft: '16px' }}>
+                          {errors.description}
+                        </IonText>
+                      )}
+                    </IonCol>
+                  </IonRow>
+                  
+                  <IonRow>
+                    <IonCol size="12">
+                      <IonItem>
                         <IonLabel position="stacked">Proveedor</IonLabel>
                         <IonInput
+                          placeholder="Nombre del proveedor..."
                           value={formData.supplier}
-                          onIonInput={(e) => handleChange('supplier', e.detail.value!)}
-                          placeholder="Nombre del proveedor"
+                          onIonInput={e => handleChange('supplier', e.detail.value!)}
                         />
                       </IonItem>
                     </IonCol>
@@ -620,19 +596,18 @@ expenseData.date = new Date(expenseData.date as string).toISOString();
 
           {/* Notas adicionales */}
           <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
-            <IonCardHeader>
-              <IonCardTitle style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <IonIcon icon={informationCircle} />
-                Información adicional
+            <IonCardHeader style={{ paddingBottom: '10px' }}>
+              <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-medium)' }}>
+                Notas adicionales
               </IonCardTitle>
             </IonCardHeader>
             <IonCardContent>
-              <IonItem lines="none" style={{ '--background': '#f8fafc', '--border-radius': '12px' }}>
-                <IonLabel position="stacked">Notas</IonLabel>
+              <IonItem>
+                <IonLabel position="stacked">Observaciones</IonLabel>
                 <IonTextarea
+                  placeholder="Cualquier información adicional relevante..."
                   value={formData.notes}
-                  onIonInput={(e) => handleChange('notes', e.detail.value!)}
-                  placeholder="Notas adicionales sobre el gasto"
+                  onIonInput={e => handleChange('notes', e.detail.value!)}
                   rows={3}
                 />
               </IonItem>
@@ -643,15 +618,15 @@ expenseData.date = new Date(expenseData.date as string).toISOString();
           <div style={{ 
             display: 'flex', 
             gap: '12px', 
-            marginTop: '32px',
-            paddingBottom: '20px'
+            justifyContent: 'space-between',
+            marginTop: '20px'
           }}>
             <IonButton
-              expand="block"
               fill="outline"
+              expand="block"
               onClick={onClose}
               disabled={submitting}
-              style={{ '--border-radius': '12px' }}
+              style={{ flex: 1, '--border-radius': '12px' }}
             >
               Cancelar
             </IonButton>
@@ -660,7 +635,7 @@ expenseData.date = new Date(expenseData.date as string).toISOString();
               expand="block"
               onClick={handleSubmit}
               disabled={submitting}
-              style={{ '--border-radius': '12px' }}
+              style={{ flex: 2, '--border-radius': '12px' }}
             >
               {submitting ? (
                 <>

@@ -152,14 +152,18 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const popoverRef = useRef<HTMLIonPopoverElement>(null);
 
-  // Filtrar páginas según permisos del usuario
+  // TEMPORALMENTE: Mostrar todas las páginas sin filtro de permisos
   const getAvailablePages = (): PageConfig[] => {
-    return ALL_PAGES.filter(page => {
-      // Verificar si el usuario tiene TODOS los permisos requeridos para esta página
-      return page.requiredPermissions.every(permission => 
-        userPermissions.includes(permission)
-      );
-    });
+    // Comentamos el filtro de permisos para mostrar todos los paneles
+    return ALL_PAGES;
+    
+    // Código original comentado:
+    // return ALL_PAGES.filter(page => {
+    //   // Verificar si el usuario tiene TODOS los permisos requeridos para esta página
+    //   return page.requiredPermissions.every(permission => 
+    //     userPermissions.includes(permission)
+    //   );
+    // });
   };
 
   const availablePages = getAvailablePages();
@@ -237,78 +241,42 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({
                 button
                 onClick={() => handlePageSelect(page.route)}
                 style={{
-                  '--background': currentRoute === page.route ? 'rgba(var(--ion-color-primary-rgb), 0.1)' : 'transparent',
-                  '--border-radius': '8px',
-                  margin: '4px 8px'
+                  '--background': currentRoute === page.route ? 'var(--ion-color-primary-tint)' : 'transparent'
                 }}
               >
-                <div
+                <IonIcon
+                  icon={page.icon}
                   slot="start"
                   style={{
-                    background: `var(--ion-color-${page.color})`,
-                    borderRadius: '8px',
-                    width: '40px',
-                    height: '40px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: '12px'
+                    color: `var(--ion-color-${page.color})`,
+                    fontSize: '20px'
                   }}
-                >
-                  <IonIcon
-                    icon={page.icon}
-                    style={{
-                      fontSize: '20px',
-                      color: 'white'
-                    }}
-                  />
-                </div>
-                
+                />
                 <IonLabel>
-                  <h3 style={{ 
-                    fontWeight: '600',
-                    color: currentRoute === page.route ? 'var(--ion-color-primary)' : '#2c3e50'
-                  }}>
+                  <h3 style={{ fontWeight: '600', margin: '0 0 4px 0' }}>
                     {page.name}
                   </h3>
                   <p style={{ 
+                    color: '#6c757d', 
                     fontSize: '12px',
-                    color: '#6c757d',
-                    margin: '4px 0 0 0'
+                    margin: 0
                   }}>
                     {page.description}
                   </p>
                 </IonLabel>
-
                 {currentRoute === page.route && (
                   <IonIcon
                     icon={checkmarkCircle}
                     slot="end"
                     style={{
                       color: 'var(--ion-color-primary)',
-                      fontSize: '20px'
+                      fontSize: '16px'
                     }}
                   />
                 )}
               </IonItem>
             ))}
           </IonList>
-
-          {/* Información adicional */}
-          <div style={{
-            padding: '16px',
-            borderTop: '1px solid rgba(0,0,0,0.1)',
-            marginTop: '8px'
-          }}>
-            <p style={{
-              fontSize: '12px',
-              color: '#8e9aaf',
-              margin: 0,
-              textAlign: 'center'
-            }}>
-              Páginas disponibles: {availablePages.length} de {ALL_PAGES.length}
-            </p>
-          </div>
         </IonContent>
       </IonPopover>
     </>
