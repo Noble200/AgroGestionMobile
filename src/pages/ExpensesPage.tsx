@@ -1,37 +1,53 @@
+// src/pages/ExpensesPage.tsx - Página principal de gastos
 import React from 'react';
-import {
-  IonContent,
-  IonHeader,
-  IonPage,
-  IonTitle,
-  IonToolbar,
-  IonCard,
-  IonCardContent,
-  IonIcon,
-  IonButton
-} from '@ionic/react';
-import { receipt, construct } from 'ionicons/icons';
+import ExpensesPanel from '../components/panels/Expenses/ExpensesPanel';
+import useExpensesController from '../controllers/ExpensesController';
 
-export const ExpensesPage: React.FC = () => {
+const ExpensesPage: React.FC = () => {
+  // Usar el controlador para obtener datos y funciones
+  const {
+    expenses,
+    products,
+    loading,
+    error,
+    selectedExpense,
+    dialogOpen,
+    dialogType,
+    filterOptions,
+    statistics,
+    handleAddExpense,
+    handleEditExpense,
+    handleViewExpense,
+    handleDeleteExpense,
+    handleSaveExpense,
+    handleFilterChange,
+    handleSearch,
+    handleCloseDialog,
+    refreshData
+  } = useExpensesController();
+
+  // Renderizar el componente visual con los datos del controlador
   return (
-    <IonPage className="agrogestion-page">
-      <IonHeader className="agrogestion-header">
-        <IonToolbar>
-          <IonTitle>Gastos</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent>
-        <div className="empty-state">
-          <IonIcon icon={receipt} />
-          <h3>Control de Gastos</h3>
-          <p>Lleva un registro detallado de todos los gastos operacionales de tu negocio agrícola.</p>
-          <IonButton className="agro-button">
-            <IonIcon icon={construct} slot="start" />
-            Próximamente
-          </IonButton>
-        </div>
-      </IonContent>
-    </IonPage>
+    <ExpensesPanel
+      expenses={expenses}
+      products={products}
+      loading={loading}
+      error={error}
+      selectedExpense={selectedExpense}
+      dialogOpen={dialogOpen}
+      dialogType={dialogType}
+      filterOptions={filterOptions}
+      statistics={statistics}
+      onAddExpense={handleAddExpense}
+      onEditExpense={handleEditExpense}
+      onViewExpense={handleViewExpense}
+      onDeleteExpense={handleDeleteExpense}
+      onSaveExpense={handleSaveExpense}
+      onFilterChange={handleFilterChange}
+      onSearch={handleSearch}
+      onCloseDialog={handleCloseDialog}
+      onRefresh={refreshData}
+    />
   );
 };
 

@@ -330,3 +330,132 @@
     background-color: #2a2a2a;
   }
 }
+
+/* Agrega esto a src/theme/agrogestion.css o crea src/pages/DashboardPage.css */
+
+/* Estilos para las tarjetas de estadísticas */
+.stat-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.stat-card-primary {
+  border-left: 4px solid var(--ion-color-primary);
+}
+
+.stat-card-warning {
+  border-left: 4px solid var(--ion-color-warning);
+}
+
+.stat-card-danger {
+  border-left: 4px solid var(--ion-color-danger);
+}
+
+.stat-card-secondary {
+  border-left: 4px solid var(--ion-color-secondary);
+}
+
+.stat-card-tertiary {
+  border-left: 4px solid var(--ion-color-tertiary);
+}
+
+.stat-card-success {
+  border-left: 4px solid var(--ion-color-success);
+}
+
+/* Mejoras para las listas */
+ion-item {
+  --inner-padding-start: 16px;
+  --inner-padding-end: 16px;
+  --padding-start: 0;
+  --padding-end: 0;
+}
+
+ion-badge {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Animaciones suaves */
+ion-card {
+  transition: all 0.3s ease;
+}
+
+ion-card:hover {
+  transform: translateY(-1px);
+}
+
+/* Responsive para dispositivos móviles */
+@media (max-width: 768px) {
+  .stat-card ion-card-content {
+    padding: 12px;
+  }
+  
+  ion-grid ion-row ion-col {
+    padding: 4px;
+  }
+}
+
+/* Estilos para badges de urgencia */
+ion-badge[color="danger"] {
+  --background: #dc3545;
+  --color: white;
+}
+
+ion-badge[color="warning"] {
+  --background: #ffc107;
+  --color: #212529;
+}
+
+ion-badge[color="primary"] {
+  --background: #007bff;
+  --color: white;
+}
+
+ion-badge[color="success"] {
+  --background: #28a745;
+  --color: white;
+}
+
+ion-badge[color="tertiary"] {
+  --background: #6f42c1;
+  --color: white;
+}
+
+/* Mejorar la apariencia de los elementos de lista */
+ion-item h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+}
+
+ion-item p {
+  margin: 2px 0;
+  font-size: 14px;
+}
+
+/* Estilo para el botón de refresh en el header */
+ion-toolbar ion-button {
+  --padding-start: 8px;
+  --padding-end: 8px;
+}
+
+/* Mejoras para el card de error */
+ion-card[color="danger"] ion-card-content {
+  padding: 16px;
+}
+
+ion-card[color="danger"] h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+}
+
+ion-card[color="danger"] p {
+  margin: 0 0 12px 0;
+  opacity: 0.9;
+}
