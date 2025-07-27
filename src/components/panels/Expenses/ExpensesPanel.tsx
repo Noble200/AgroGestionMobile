@@ -394,7 +394,7 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
           </IonGrid>
         </div>
 
-        {/* Barra de búsqueda y filtros - MANTENIENDO DISEÑO ORIGINAL */}
+        {/* Barra de búsqueda y filtros - SECCIÓN MODIFICADA PARA CORREGIR EL PROBLEMA */}
         <div style={{ padding: '0 20px 20px' }}>
           <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
             <IonCardContent>
@@ -415,16 +415,32 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
                 
                 <IonButton
                   fill="outline"
-                  onClick={() => setShowFilters(!showFilters)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowFilters(!showFilters);
+                  }}
                   style={{ '--border-radius': '12px' }}
                 >
                   <IonIcon icon={filterOutline} />
                 </IonButton>
               </div>
 
-              {/* Filtros expandibles */}
-              {showFilters && (
-                <div style={{ marginTop: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {/* Contenedor de filtros con altura fija para evitar saltos - CAMBIO AQUÍ */}
+              <div style={{ 
+                marginTop: showFilters ? '16px' : '0px',
+                height: showFilters ? 'auto' : '0px',
+                overflow: 'hidden',
+                transition: 'height 0.3s ease-in-out, margin-top 0.3s ease-in-out'
+              }}>
+                {/* Filtros expandibles */}
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '12px', 
+                  flexWrap: 'wrap',
+                  opacity: showFilters ? 1 : 0,
+                  transition: 'opacity 0.3s ease-in-out'
+                }}>
                   <IonSelect
                     placeholder="Tipo de gasto"
                     value={filterOptions.type}
@@ -449,7 +465,7 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
                     <IonSelectOption value="administrativo">Administrativo</IonSelectOption>
                   </IonSelect>
                 </div>
-              )}
+              </div>
             </IonCardContent>
           </IonCard>
 
