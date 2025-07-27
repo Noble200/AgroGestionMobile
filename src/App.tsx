@@ -1,23 +1,11 @@
+// src/App.tsx - CORREGIDO: Agregando ruta de gastos
 import { Redirect, Route } from 'react-router-dom';
 import {
   IonApp,
-  IonIcon,
-  IonLabel,
   IonRouterOutlet,
-  IonTabBar,
-  IonTabButton,
-  IonTabs,
   setupIonicReact
 } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
-import { 
-  home, 
-  cube, 
-  swapHorizontal, 
-  leaf, 
-  people,
-  receipt
-} from 'ionicons/icons';
 
 // Páginas de AgroGestión
 import DashboardPage from './pages/DashboardPage';
@@ -25,7 +13,7 @@ import ProductsPage from './pages/ProductsPage';
 import TransfersPage from './pages/TransfersPage';
 import FieldsPage from './pages/FieldsPage';
 import UsersPage from './pages/UsersPage';
-import ExpensesPage from './pages/ExpensesPage'; // ← AGREGAR ESTA IMPORTACIÓN
+import ExpensesPage from './pages/ExpensesPage';  // ← AGREGADO
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -49,67 +37,36 @@ setupIonicReact();
 const App: React.FC = () => (
   <IonApp>
     <IonReactRouter>
-      <IonTabs>
-        <IonRouterOutlet>
-          {/* Ruta principal - Dashboard */}
-          <Route exact path="/dashboard">
-            <DashboardPage />
-          </Route>
-          
-          {/* Rutas principales */}
-          <Route exact path="/productos">
-            <ProductsPage />
-          </Route>
-          <Route exact path="/transferencias">
-            <TransfersPage />
-          </Route>
-          <Route exact path="/campos">
-            <FieldsPage />
-          </Route>
-          <Route exact path="/usuarios">
-            <UsersPage />
-          </Route>
-          
-          {/* ← AGREGAR ESTA RUTA PARA GASTOS */}
-          <Route exact path="/gastos">
-            <ExpensesPage />
-          </Route>
-          
-          {/* Ruta por defecto */}
-          <Route exact path="/">
-            <Redirect to="/dashboard" />
-          </Route>
-        </IonRouterOutlet>
+      <IonRouterOutlet>
+        {/* Ruta principal - Dashboard */}
+        <Route exact path="/dashboard">
+          <DashboardPage />
+        </Route>
         
-        {/* Tab Bar con las opciones principales */}
-        <IonTabBar slot="bottom" className="agro-tab-bar">
-          <IonTabButton tab="dashboard" href="/dashboard">
-            <IonIcon icon={home} />
-            <IonLabel>Dashboard</IonLabel>
-          </IonTabButton>
-          
-          <IonTabButton tab="productos" href="/productos">
-            <IonIcon icon={cube} />
-            <IonLabel>Productos</IonLabel>
-          </IonTabButton>
-          
-          <IonTabButton tab="transferencias" href="/transferencias">
-            <IonIcon icon={swapHorizontal} />
-            <IonLabel>Transferencias</IonLabel>
-          </IonTabButton>
-          
-          <IonTabButton tab="campos" href="/campos">
-            <IonIcon icon={leaf} />
-            <IonLabel>Campos</IonLabel>
-          </IonTabButton>
-          
-          {/* ← OPCIONAL: Agregar gastos al tab bar también */}
-          <IonTabButton tab="gastos" href="/gastos">
-            <IonIcon icon={receipt} />
-            <IonLabel>Gastos</IonLabel>
-          </IonTabButton>
-        </IonTabBar>
-      </IonTabs>
+        {/* Rutas principales */}
+        <Route exact path="/productos">
+          <ProductsPage />
+        </Route>
+        <Route exact path="/transferencias">
+          <TransfersPage />
+        </Route>
+        <Route exact path="/campos">
+          <FieldsPage />
+        </Route>
+        <Route exact path="/usuarios">
+          <UsersPage />
+        </Route>
+        
+        {/* Ruta de gastos */}
+        <Route exact path="/gastos">
+          <ExpensesPage />
+        </Route>
+        
+        {/* Ruta por defecto */}
+        <Route exact path="/">
+          <Redirect to="/dashboard" />
+        </Route>
+      </IonRouterOutlet>
     </IonReactRouter>
   </IonApp>
 );

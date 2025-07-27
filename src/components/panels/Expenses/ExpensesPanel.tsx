@@ -1,4 +1,4 @@
-// src/components/panels/Expenses/ExpensesPanel.tsx - Panel moderno para gestión de gastos
+// src/components/panels/Expenses/ExpensesPanel.tsx - Panel CORREGIDO para gestión de gastos
 import React, { useState } from 'react';
 import {
   IonContent,
@@ -98,7 +98,7 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
     expenseId: ''
   });
 
-  // Permisos del usuario (hardcoded por ahora, en producción vendría de un contexto)
+  // Permisos del usuario
   const userPermissions = [
     'dashboard.view',
     'products.view',
@@ -130,15 +130,15 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
     
     try {
       const dateObj = date.seconds 
-        ? new Date(date.seconds * 1000) 
+        ? new Date(date.seconds * 1000)
         : new Date(date);
       return dateObj.toLocaleDateString('es-ES', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
       });
-    } catch (error) {
-      return 'Fecha inválida';
+    } catch (err) {
+      return '-';
     }
   };
 
@@ -150,17 +150,7 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
     }).format(amount || 0);
   };
 
-  // Función para obtener el texto del tipo de gasto
-  const getExpenseTypeText = (type: string): string => {
-    return type === 'product' ? 'Venta de producto' : 'Gasto varios';
-  };
-
-  // Función para obtener el color según el tipo
-  const getExpenseTypeColor = (type: string): string => {
-    return type === 'product' ? 'success' : 'primary';
-  };
-
-  // Componente para tarjetas de estadísticas modernas
+  // Componente para tarjetas de estadísticas modernas - MANTENIENDO ESTILO ORIGINAL
   const ModernStatCard: React.FC<{
     title: string;
     value: string | number;
@@ -168,266 +158,106 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
     icon: string;
     color: string;
   }> = ({ title, value, description, icon, color }) => (
-    <IonCol size="6" sizeMd="3">
-      <div 
+    <IonCol size="12" sizeMd="6" sizeLg="3">
+      <div
         style={{
           background: 'white',
-          borderRadius: '20px',
-          padding: '24px 20px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
+          borderRadius: '16px',
+          padding: '20px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
           border: '1px solid rgba(0, 0, 0, 0.05)',
-          minHeight: '140px',
+          height: '100%',
           display: 'flex',
-          flexDirection: 'column',
-          position: 'relative',
-          overflow: 'hidden',
-          transition: 'all 0.3s ease'
+          flexDirection: 'column'
         }}
       >
-        {/* Línea de color lateral */}
-        <div 
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: '4px',
-            background: `var(--ion-color-${color})`
-          }}
-        />
-        
-        {/* Header con icono */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          marginBottom: '16px' 
-        }}>
-          <div 
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+          <div
             style={{
-              background: `var(--ion-color-${color}-tint)`,
+              background: `linear-gradient(135deg, var(--ion-color-${color}) 0%, var(--ion-color-${color}-shade) 100%)`,
               borderRadius: '12px',
               width: '48px',
               height: '48px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: '12px'
+              justifyContent: 'center'
             }}
           >
-            <IonIcon 
-              icon={icon} 
-              style={{ 
-                fontSize: '24px', 
-                color: `var(--ion-color-${color})` 
-              }} 
-            />
+            <IonIcon icon={icon} style={{ fontSize: '24px', color: 'white' }} />
           </div>
-          <div>
-            <div style={{ 
-              fontSize: '14px', 
-              color: '#6c757d',
-              fontWeight: '600',
-              marginBottom: '4px'
+          <div style={{ flex: 1 }}>
+            <h3 style={{ 
+              margin: 0, 
+              fontSize: '32px', 
+              fontWeight: '700',
+              color: '#1a1a1a',
+              lineHeight: '1'
             }}>
-              {title}
-            </div>
+              {value}
+            </h3>
           </div>
         </div>
-
-        {/* Valor principal */}
-        <div style={{ 
-          fontSize: '32px', 
-          fontWeight: '700', 
-          color: '#2c3e50',
-          lineHeight: '1',
-          marginBottom: '8px'
-        }}>
-          {typeof value === 'number' ? value.toLocaleString() : value}
-        </div>
-        
-        {/* Descripción */}
-        <div style={{ 
-          fontSize: '12px', 
-          color: '#8e9aaf'
-        }}>
-          {description}
+        <div>
+          <h4 style={{ 
+            margin: '0 0 4px 0', 
+            fontSize: '16px', 
+            fontWeight: '600',
+            color: '#4a5568' 
+          }}>
+            {title}
+          </h4>
+          <p style={{ 
+            margin: 0, 
+            fontSize: '14px', 
+            color: '#8e9aaf',
+            fontWeight: '500' 
+          }}>
+            {description}
+          </p>
         </div>
       </div>
     </IonCol>
   );
 
-  // Componente para items de gasto modernos
-  const ModernExpenseItem: React.FC<{
-    expense: any;
-  }> = ({ expense }) => (
-    <IonCard style={{ 
-      margin: '8px 0',
-      borderRadius: '16px',
-      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.06)',
-      border: '1px solid rgba(0, 0, 0, 0.05)'
-    }}>
-      <IonCardContent style={{ padding: '20px' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          {/* Información principal */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-            {/* Icono del tipo */}
-            <div 
-              style={{
-                background: `var(--ion-color-${getExpenseTypeColor(expense.type)}-tint)`,
-                borderRadius: '12px',
-                width: '48px',
-                height: '48px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}
-            >
-              <IonIcon 
-                icon={expense.type === 'product' ? storefrontOutline : receipt} 
-                style={{ 
-                  fontSize: '20px', 
-                  color: `var(--ion-color-${getExpenseTypeColor(expense.type)})` 
-                }} 
-              />
-            </div>
-            
-            {/* Detalles */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '4px'
-              }}>
-                <h3 style={{ 
-                  margin: 0,
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: '#2c3e50',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {expense.type === 'product' ? expense.productName : expense.description}
-                </h3>
-                
-                <IonBadge 
-                  color={getExpenseTypeColor(expense.type)}
-                  style={{ 
-                    '--background': `var(--ion-color-${getExpenseTypeColor(expense.type)}-tint)`,
-                    '--color': `var(--ion-color-${getExpenseTypeColor(expense.type)})`,
-                    fontSize: '11px',
-                    padding: '4px 8px'
-                  }}
-                >
-                  {getExpenseTypeText(expense.type)}
-                </IonBadge>
-              </div>
-              
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                marginBottom: '8px'
-              }}>
-                <span style={{ 
-                  fontSize: '14px',
-                  color: '#495057',
-                  fontWeight: '500'
-                }}>
-                  {expense.expenseNumber}
-                </span>
-                
-                <span style={{ 
-                  fontSize: '14px',
-                  color: '#6c757d'
-                }}>
-                  {formatDate(expense.date)}
-                </span>
-              </div>
-
-              {/* Información específica según tipo */}
-              {expense.type === 'product' ? (
-                <div style={{ fontSize: '12px', color: '#8e9aaf' }}>
-                  {expense.quantitySold} unidades × {formatCurrency(expense.unitPrice)}
-                  {expense.saleReason && ` • ${expense.saleReason}`}
-                </div>
-              ) : (
-                <div style={{ fontSize: '12px', color: '#8e9aaf' }}>
-                  {expense.category || 'Sin categoría'}
-                  {expense.supplier && ` • Proveedor: ${expense.supplier}`}
-                </div>
-              )}
-            </div>
-          </div>
-          
-          {/* Importe y acciones */}
+  // Si está cargando, mostrar spinner
+  if (loading) {
+    return (
+      <IonPage>
+        <IonHeader className="ion-no-border">
+          <IonToolbar 
+            style={{
+              '--background': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              '--color': 'white'
+            }}
+          >
+            <IonTitle style={{ fontWeight: '700', fontSize: '20px' }}>
+              Gastos
+            </IonTitle>
+          </IonToolbar>
+        </IonHeader>
+        
+        <IonContent>
           <div style={{ 
             display: 'flex', 
+            justifyContent: 'center', 
             alignItems: 'center', 
-            gap: '16px',
-            flexShrink: 0
+            height: '300px',
+            flexDirection: 'column',
+            gap: '20px'
           }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ 
-                fontSize: '20px',
-                fontWeight: '700',
-                color: '#2c3e50'
-              }}>
-                {expense.type === 'product' 
-                  ? formatCurrency(expense.totalAmount)
-                  : formatCurrency(expense.amount)
-                }
-              </div>
-            </div>
-            
-            {/* Botón de acciones */}
-            <IonButton
-              id={`expense-actions-${expense.id}`}
-              fill="clear"
-              size="small"
-              style={{ '--color': '#6c757d' }}
-            >
-              <IonIcon icon={ellipsisVertical} />
-            </IonButton>
-            
-            {/* Popover de acciones */}
-            <IonPopover trigger={`expense-actions-${expense.id}`} dismissOnSelect={true}>
-              <IonContent>
-                <IonList>
-                  <IonItem button onClick={() => onViewExpense(expense)}>
-                    <IonIcon icon={eyeOutline} slot="start" />
-                    <IonLabel>Ver detalles</IonLabel>
-                  </IonItem>
-                  <IonItem button onClick={() => onEditExpense(expense)}>
-                    <IonIcon icon={createOutline} slot="start" />
-                    <IonLabel>Editar</IonLabel>
-                  </IonItem>
-                  <IonItem 
-                    button 
-                    onClick={() => setDeleteAlert({isOpen: true, expenseId: expense.id})}
-                    color="danger"
-                  >
-                    <IonIcon icon={trashOutline} slot="start" />
-                    <IonLabel>Eliminar</IonLabel>
-                  </IonItem>
-                </IonList>
-              </IonContent>
-            </IonPopover>
+            <IonSpinner name="crescent" style={{ '--color': 'var(--ion-color-primary)' }} />
+            <IonText style={{ color: '#8e9aaf', fontWeight: '500' }}>
+              Cargando gastos...
+            </IonText>
           </div>
-        </div>
-      </IonCardContent>
-    </IonCard>
-  );
+        </IonContent>
+      </IonPage>
+    );
+  }
 
   return (
     <IonPage>
-      {/* Header moderno con gradiente */}
+      {/* ESTRUCTURA CORREGIDA: Header igual al Dashboard */}
       <IonHeader className="ion-no-border">
         <IonToolbar 
           style={{
@@ -435,26 +265,28 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
             '--color': 'white'
           }}
         >
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 16px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <PanelSelector 
-                userPermissions={userPermissions}
-                currentRoute="/expenses"
-              />
-              <IonTitle style={{ fontSize: '20px', fontWeight: '700' }}>
-                Gastos
-              </IonTitle>
-            </div>
+          <IonTitle style={{ fontWeight: '700', fontSize: '20px' }}>
+            Gastos
+          </IonTitle>
+          <div slot="end" style={{ display: 'flex', gap: '8px', paddingRight: '16px' }}>
+            {/* Selector de páginas */}
+            <PanelSelector
+              userPermissions={userPermissions}
+              currentRoute="/gastos"
+              onNavigate={(route) => {
+                console.log('Navegando a:', route);
+                window.location.href = route;
+              }}
+            />
             
             <IonButton
               fill="clear"
-              onClick={onRefresh}
-              style={{ '--color': 'white' }}
+              onClick={() => onRefresh()}
+              disabled={loading}
+              style={{ 
+                '--color': 'white',
+                '--border-radius': '12px'
+              }}
             >
               <IonIcon icon={refresh} />
             </IonButton>
@@ -462,37 +294,71 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
         </IonToolbar>
       </IonHeader>
 
-      <IonContent>
+              {/* ESTRUCTURA CORREGIDA: Content igual al Dashboard - SIN POSICIÓN FIJA */}
+      <IonContent 
+        style={{ '--background': '#f8fafc' }}
+        forceOverscroll={false}
+        scrollEvents={true}
+      >
         <IonRefresher slot="fixed" onIonRefresh={doRefresh}>
-          <IonRefresherContent />
+          <IonRefresherContent></IonRefresherContent>
         </IonRefresher>
 
-        {/* Hero Section con gradiente */}
-        <div style={{
+        {/* Header con título - igual al Dashboard */}
+        <div style={{ 
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          padding: '40px 20px 80px',
-          color: 'white',
-          position: 'relative'
+          padding: '0 20px 30px',
+          marginBottom: '20px'
         }}>
-          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-            <h1 style={{
-              fontSize: '32px',
-              fontWeight: '700',
-              margin: '0 0 12px 0'
+          <div style={{ paddingTop: '10px' }}>
+            <h1 style={{ 
+              color: 'white', 
+              fontSize: '28px', 
+              fontWeight: '300',
+              margin: '0 0 8px 0'
             }}>
-              Control de Gastos
+              Gestión de Gastos 💰
             </h1>
-            <p style={{
+            <p style={{ 
+              color: 'rgba(255, 255, 255, 0.8)', 
               fontSize: '16px',
-              opacity: 0.9,
-              margin: 0
+              margin: 0,
+              fontWeight: '400'
             }}>
-              Gestiona ventas de productos y gastos varios
+              Controla tus gastos y ventas de productos
             </p>
           </div>
         </div>
 
-        {/* Estadísticas principales */}
+        {/* Mostrar error si existe */}
+        {error && (
+          <div style={{ padding: '0 20px 20px' }}>
+            <IonCard color="danger">
+              <IonCardContent>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <IonIcon icon={closeCircle} style={{ fontSize: '24px', color: 'white' }} />
+                  <div>
+                    <h3 style={{ margin: '0 0 4px 0', color: 'white', fontSize: '18px' }}>
+                      Error al cargar gastos
+                    </h3>
+                    <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.9)' }}>{error}</p>
+                  </div>
+                  <IonButton 
+                    fill="outline" 
+                    color="light" 
+                    size="small" 
+                    onClick={() => onRefresh()}
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    Reintentar
+                  </IonButton>
+                </div>
+              </IonCardContent>
+            </IonCard>
+          </div>
+        )}
+
+        {/* Estadísticas principales - MANTENIENDO DISEÑO ORIGINAL */}
         <div style={{ padding: '0 20px', marginTop: '-40px', marginBottom: '30px' }}>
           <IonGrid>
             <IonRow>
@@ -528,7 +394,7 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
           </IonGrid>
         </div>
 
-        {/* Barra de búsqueda y filtros */}
+        {/* Barra de búsqueda y filtros - MANTENIENDO DISEÑO ORIGINAL */}
         <div style={{ padding: '0 20px 20px' }}>
           <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
             <IonCardContent>
@@ -537,9 +403,12 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
                   placeholder="Buscar gastos..."
                   debounce={300}
                   onIonInput={(e) => onSearch(e.detail.value!)}
-                  style={{ 
-                    '--background': '#f8f9fa',
-                    '--border-radius': '12px',
+                  style={{
+                    '--background': 'transparent',
+                    '--color': '#000',
+                    '--placeholder-color': '#8e8e93',
+                    '--icon-color': '#8e8e93',
+                    '--clear-button-color': '#8e8e93',
                     flex: 1
                   }}
                 />
@@ -552,111 +421,253 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
                   <IonIcon icon={filterOutline} />
                 </IonButton>
               </div>
-              
+
               {/* Filtros expandibles */}
               {showFilters && (
-                <div style={{ 
-                  marginTop: '16px', 
-                  paddingTop: '16px', 
-                  borderTop: '1px solid #e9ecef',
-                  display: 'flex',
-                  gap: '12px',
-                  flexWrap: 'wrap'
-                }}>
+                <div style={{ marginTop: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   <IonSelect
-                    placeholder="Tipo"
+                    placeholder="Tipo de gasto"
+                    value={filterOptions.type}
                     onIonChange={(e) => onFilterChange('type', e.detail.value)}
-                    style={{ minWidth: '120px' }}
+                    style={{ minWidth: '150px' }}
                   >
-                    {filterOptions.types?.map((option: any) => (
-                      <IonSelectOption key={option.value} value={option.value}>
-                        {option.label}
-                      </IonSelectOption>
-                    ))}
+                    <IonSelectOption value="">Todos</IonSelectOption>
+                    <IonSelectOption value="product">Ventas de productos</IonSelectOption>
+                    <IonSelectOption value="misc">Gastos varios</IonSelectOption>
                   </IonSelect>
                   
                   <IonSelect
                     placeholder="Categoría"
+                    value={filterOptions.category}
                     onIonChange={(e) => onFilterChange('category', e.detail.value)}
-                    style={{ minWidth: '140px' }}
+                    style={{ minWidth: '150px' }}
                   >
-                    {filterOptions.categories?.map((option: any) => (
-                      <IonSelectOption key={option.value} value={option.value}>
-                        {option.label}
-                      </IonSelectOption>
-                    ))}
+                    <IonSelectOption value="">Todas</IonSelectOption>
+                    <IonSelectOption value="combustible">Combustible</IonSelectOption>
+                    <IonSelectOption value="mantenimiento">Mantenimiento</IonSelectOption>
+                    <IonSelectOption value="servicios">Servicios</IonSelectOption>
+                    <IonSelectOption value="administrativo">Administrativo</IonSelectOption>
                   </IonSelect>
                 </div>
               )}
             </IonCardContent>
           </IonCard>
+
+          {/* Botón "Agregar Gastos" - CORREGIDO PARA QUE FUNCIONE */}
+          <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
+            <IonCardContent style={{ textAlign: 'center', padding: '20px' }}>
+              <IonButton 
+                expand="block"
+                onClick={onAddExpense}
+                style={{ 
+                  '--border-radius': '12px',
+                  height: '48px',
+                  fontWeight: '600'
+                }}
+              >
+                <IonIcon icon={add} slot="start" />
+                Agregar Gastos
+              </IonButton>
+            </IonCardContent>
+          </IonCard>
         </div>
 
-        {/* Lista de gastos */}
+        {/* Lista de gastos - PADDING EXACTO COMO DASHBOARD */}
         <div style={{ padding: '0 20px 100px' }}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <IonSpinner name="crescent" />
-              <IonText>
-                <p style={{ marginTop: '16px', color: '#6c757d' }}>
-                  Cargando gastos...
-                </p>
-              </IonText>
-            </div>
-          ) : error ? (
-            <IonCard style={{ borderRadius: '16px' }}>
-              <IonCardContent style={{ textAlign: 'center', padding: '40px' }}>
-                <IonIcon 
-                  icon={closeCircle} 
-                  style={{ fontSize: '48px', color: '#dc3545', marginBottom: '16px' }} 
-                />
-                <IonText color="danger">
-                  <h3>Error al cargar gastos</h3>
-                  <p>{error}</p>
-                </IonText>
-                <IonButton onClick={onRefresh} style={{ marginTop: '16px' }}>
-                  <IonIcon icon={refresh} slot="start" />
-                  Reintentar
-                </IonButton>
-              </IonCardContent>
-            </IonCard>
-          ) : expenses.length === 0 ? (
-            <IonCard style={{ borderRadius: '16px' }}>
-              <IonCardContent style={{ textAlign: 'center', padding: '40px' }}>
+          {expenses.length === 0 ? (
+            <IonCard style={{ borderRadius: '16px', textAlign: 'center' }}>
+              <IonCardContent style={{ padding: '40px 20px' }}>
                 <IonIcon 
                   icon={receipt} 
-                  style={{ fontSize: '48px', color: '#6c757d', marginBottom: '16px' }} 
+                  style={{ fontSize: '64px', color: '#8e9aaf', marginBottom: '16px' }} 
                 />
-                <IonText>
-                  <h3>No hay gastos registrados</h3>
-                  <p style={{ color: '#6c757d' }}>
-                    Comienza agregando tu primer gasto
-                  </p>
-                </IonText>
-                <IonButton onClick={onAddExpense} style={{ marginTop: '16px' }}>
+                <h3 style={{ color: '#4a5568', margin: '0 0 8px 0' }}>
+                  No hay gastos registrados
+                </h3>
+                <p style={{ color: '#8e9aaf', margin: '0 0 20px 0' }}>
+                  Comienza agregando tu primer gasto o venta de producto
+                </p>
+                <IonButton 
+                  fill="outline" 
+                  onClick={onAddExpense}
+                  style={{ '--border-radius': '12px' }}
+                >
                   <IonIcon icon={add} slot="start" />
                   Agregar Gasto
                 </IonButton>
               </IonCardContent>
             </IonCard>
           ) : (
-            expenses.map((expense) => (
-              <ModernExpenseItem key={expense.id} expense={expense} />
-            ))
+            <IonGrid>
+              <IonRow>
+                {expenses.map((expense) => (
+                  <IonCol size="12" sizeMd="6" sizeLg="4" key={expense.id}>
+                    <IonCard 
+                      button
+                      onClick={() => onViewExpense(expense)}
+                      style={{ 
+                        borderRadius: '16px',
+                        margin: '0 0 16px 0',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s, box-shadow 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.12)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.08)';
+                      }}
+                    >
+                      <IonCardContent>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                          <div
+                            style={{
+                              background: expense.type === 'product' 
+                                ? 'linear-gradient(135deg, var(--ion-color-success) 0%, var(--ion-color-success-shade) 100%)'
+                                : 'linear-gradient(135deg, var(--ion-color-warning) 0%, var(--ion-color-warning-shade) 100%)',
+                              borderRadius: '8px',
+                              width: '40px',
+                              height: '40px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <IonIcon 
+                              icon={expense.type === 'product' ? storefrontOutline : receipt} 
+                              style={{ fontSize: '20px', color: 'white' }} 
+                            />
+                          </div>
+                          
+                          <div style={{ flex: 1 }}>
+                            <h3 style={{ 
+                              margin: 0, 
+                              fontSize: '18px', 
+                              fontWeight: '600',
+                              color: '#1a1a1a'
+                            }}>
+                              {expense.type === 'product' ? expense.productName : expense.description}
+                            </h3>
+                            <p style={{ 
+                              margin: '2px 0 0 0', 
+                              fontSize: '14px', 
+                              color: '#8e9aaf' 
+                            }}>
+                              {formatDate(expense.date)}
+                            </p>
+                          </div>
+                          
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ 
+                              fontSize: '20px', 
+                              fontWeight: '700',
+                              color: '#1a1a1a'
+                            }}>
+                              {formatCurrency(expense.type === 'product' ? expense.totalAmount : expense.amount)}
+                            </div>
+                            
+                            <IonBadge 
+                              color={expense.type === 'product' ? 'success' : 'warning'}
+                              style={{ fontSize: '11px' }}
+                            >
+                              {expense.type === 'product' ? 'Venta' : 'Gasto'}
+                            </IonBadge>
+                          </div>
+                        </div>
+                        
+                        {/* Información adicional */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '14px', color: '#8e9aaf' }}>
+                            {expense.category || expense.productCategory || 'Sin categoría'}
+                          </span>
+                          
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <IonButton
+                              fill="clear"
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditExpense(expense);
+                              }}
+                            >
+                              <IonIcon icon={createOutline} />
+                            </IonButton>
+                            
+                            <IonButton
+                              fill="clear"
+                              size="small"
+                              color="danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteAlert({ isOpen: true, expenseId: expense.id });
+                              }}
+                            >
+                              <IonIcon icon={trashOutline} />
+                            </IonButton>
+                          </div>
+                        </div>
+                      </IonCardContent>
+                    </IonCard>
+                  </IonCol>
+                ))}
+              </IonRow>
+            </IonGrid>
           )}
         </div>
 
-        {/* FAB para agregar gastos */}
-        <IonFab vertical="bottom" horizontal="end" slot="fixed">
-          <IonFabButton onClick={onAddExpense}>
+        {/* Botón FAB para agregar gasto (+ pequeño) - FUNCIONANDO */}
+        <IonFab 
+          vertical="bottom" 
+          horizontal="end" 
+          slot="fixed"
+          style={{ marginBottom: '20px', marginRight: '20px' }}
+        >
+          <IonFabButton 
+            onClick={onAddExpense}
+            style={{
+              '--background': 'linear-gradient(135deg, var(--ion-color-primary) 0%, var(--ion-color-primary-shade) 100%)',
+              '--box-shadow': '0 8px 32px rgba(0, 0, 0, 0.3)'
+            }}
+          >
             <IonIcon icon={add} />
           </IonFabButton>
         </IonFab>
 
-        {/* Alert de confirmación para eliminar */}
+        {/* Diálogos */}
+        <ExpenseDialog
+          isOpen={dialogOpen && (dialogType === 'add-expense' || dialogType === 'edit-expense')}
+          expense={selectedExpense}
+          products={products}
+          isNew={dialogType === 'add-expense'}
+          onSave={onSaveExpense}
+          onClose={onCloseDialog}
+        />
+
+        <ExpenseDetailDialog
+          isOpen={dialogOpen && dialogType === 'view-expense'}
+          expense={selectedExpense}
+          products={products}
+          onClose={onCloseDialog}
+          onEditExpense={(expense) => {
+            onCloseDialog();
+            if (expense) {
+              setTimeout(() => onEditExpense(expense), 100);
+            }
+          }}
+          onDeleteExpense={(expenseId) => {
+            if (expenseId) {
+              return onDeleteExpense(expenseId);
+            }
+            return Promise.resolve();
+          }}
+        />
+
+        {/* Alerta de confirmación para eliminar */}
         <IonAlert
           isOpen={deleteAlert.isOpen}
-          onDidDismiss={() => setDeleteAlert({isOpen: false, expenseId: ''})}
+          onDidDismiss={() => setDeleteAlert({ isOpen: false, expenseId: '' })}
           header="Confirmar eliminación"
           message="¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer."
           buttons={[
@@ -668,39 +679,14 @@ const ExpensesPanel: React.FC<ExpensesPanelProps> = ({
               text: 'Eliminar',
               role: 'destructive',
               handler: () => {
-                onDeleteExpense(deleteAlert.expenseId);
-                setDeleteAlert({isOpen: false, expenseId: ''});
+                if (deleteAlert.expenseId) {
+                  onDeleteExpense(deleteAlert.expenseId);
+                }
               }
             }
           ]}
         />
 
-        {/* Modales modernos */}
-        {dialogOpen && (
-          <>
-            {(dialogType === 'add-expense' || dialogType === 'edit-expense') && (
-              <ExpenseDialog
-                isOpen={dialogOpen}
-                expense={selectedExpense}
-                products={products}
-                isNew={dialogType === 'add-expense'}
-                onSave={onSaveExpense}
-                onClose={onCloseDialog}
-              />
-            )}
-            
-            {dialogType === 'view-expense' && (
-              <ExpenseDetailDialog
-                isOpen={dialogOpen}
-                expense={selectedExpense}
-                products={products}
-                onClose={onCloseDialog}
-                onEditExpense={onEditExpense}
-                onDeleteExpense={onDeleteExpense}
-              />
-            )}
-          </>
-        )}
       </IonContent>
     </IonPage>
   );

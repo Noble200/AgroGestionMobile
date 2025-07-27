@@ -1,5 +1,5 @@
-// src/components/panels/Expenses/ExpenseDialog.tsx - Modal moderno para crear/editar gastos
-import React, { useState, useEffect } from 'react';
+// src/components/panels/Expenses/ExpenseDialog.tsx - Modal optimizado con colores planos
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   IonModal,
   IonHeader,
@@ -83,7 +83,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
   // Formatear fecha para input de tipo date
-  const formatDateForInput = (date: any): string => {
+  const formatDateForInput = useCallback((date: any): string => {
     if (!date) return new Date().toISOString();
     
     const d = date.seconds
@@ -91,7 +91,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
       : new Date(date);
     
     return d.toISOString();
-  };
+  }, []);
 
   // Cargar datos del gasto si estamos editando
   useEffect(() => {
@@ -127,10 +127,10 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
         date: new Date().toISOString()
       }));
     }
-  }, [expense, isNew, products]);
+  }, [expense, isNew, products, formatDateForInput]);
 
-  // Manejar cambios en el formulario
-  const handleChange = (field: string, value: any) => {
+  // Manejar cambios en el formulario (OPTIMIZADO)
+  const handleChange = useCallback((field: string, value: any) => {
     // Limpiar errores al modificar el campo
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -208,15 +208,15 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
         return newData;
       });
     }
-  };
+  }, [errors, products, formData.quantitySold]);
 
   // Filtrar productos disponibles con stock > 0
-  const getAvailableProducts = () => {
+  const getAvailableProducts = useCallback(() => {
     return products.filter(product => (product.stock || 0) > 0);
-  };
+  }, [products]);
 
   // Validar formulario antes de guardar
-  const validateForm = (): boolean => {
+  const validateForm = useCallback((): boolean => {
     const newErrors: {[key: string]: string} = {};
     
     // Validaciones comunes
@@ -266,44 +266,46 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [formData, selectedProduct]);
 
-  // Manejar envío del formulario
-  const handleSubmit = async () => {
-    if (validateForm()) {
-      setSubmitting(true);
-      
-      try {
-        // Preparar datos para guardar
-        const expenseData = {
-          ...formData,
-          // Convertir números
-          ...(formData.type === 'product' ? {
-            quantitySold: parseFloat(formData.quantitySold) || 0,
-            unitPrice: parseFloat(formData.unitPrice) || 0,
-            totalAmount: parseFloat(formData.totalAmount) || 0,
-            productName: selectedProduct?.name || '',
-            productCategory: selectedProduct?.category || ''
-          } : {
-            amount: parseFloat(formData.amount) || 0
-          }),
-          // Convertir fecha
-          date: new Date(formData.date)
-        };
-        
-        const success = await onSave(expenseData);
-        
-        if (success) {
-          onClose();
-        }
-        
-      } catch (error) {
-        console.error('Error al guardar gasto:', error);
-      } finally {
-        setSubmitting(false);
-      }
+  // Manejar envío del formulario (OPTIMIZADO)
+  const handleSubmit = useCallback(async () => {
+    if (!validateForm()) {
+      return;
     }
-  };
+
+    setSubmitting(true);
+    
+    try {
+      // Preparar datos para guardar
+      const expenseData = {
+        ...formData,
+        // Convertir números
+        ...(formData.type === 'product' ? {
+          quantitySold: parseFloat(formData.quantitySold) || 0,
+          unitPrice: parseFloat(formData.unitPrice) || 0,
+          totalAmount: parseFloat(formData.totalAmount) || 0,
+          productName: selectedProduct?.name || '',
+          productCategory: selectedProduct?.category || ''
+        } : {
+          amount: parseFloat(formData.amount) || 0
+        }),
+        // Convertir fecha
+        date: new Date(formData.date)
+      };
+      
+      const success = await onSave(expenseData);
+      
+      if (success) {
+        onClose();
+      }
+      
+    } catch (error) {
+      console.error('Error al guardar gasto:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [formData, selectedProduct, validateForm, onSave, onClose]);
 
   // Categorías predefinidas para gastos varios
   const miscCategories = [
@@ -320,23 +322,28 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
   return (
     <IonModal isOpen={isOpen} onDidDismiss={onClose}>
       <IonHeader>
-        <IonToolbar>
-          <IonTitle style={{ fontWeight: '600' }}>
+        <IonToolbar style={{ '--background': 'var(--ion-color-primary)' }}>
+          <IonTitle style={{ fontWeight: '600', color: 'white' }}>
             {isNew ? 'Registrar nuevo gasto' : 'Editar gasto'}
           </IonTitle>
           <IonButtons slot="end">
-            <IonButton onClick={onClose} disabled={submitting}>
+            <IonButton onClick={onClose} disabled={submitting} style={{ '--color': 'white' }}>
               <IonIcon icon={close} />
             </IonButton>
           </IonButtons>
         </IonToolbar>
       </IonHeader>
 
-      <IonContent>
+      <IonContent style={{ '--background': 'var(--ion-color-light)' }}>
         <div style={{ padding: '20px' }}>
           
           {/* Selector de tipo de gasto */}
-          <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
+          <IonCard style={{ 
+            borderRadius: '12px', 
+            marginBottom: '20px',
+            boxShadow: 'none',
+            border: '1px solid var(--ion-color-light-shade)'
+          }}>
             <IonCardHeader style={{ paddingBottom: '10px' }}>
               <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-primary)' }}>
                 Tipo de gasto
@@ -346,7 +353,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
               <IonSegment
                 value={formData.type}
                 onIonChange={e => handleChange('type', e.detail.value)}
-                style={{ '--background': '#f8f9fa' }}
+                style={{ '--background': 'var(--ion-color-light)' }}
               >
                 <IonSegmentButton value="product">
                   <IonIcon icon={storefront} />
@@ -361,7 +368,12 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
           </IonCard>
 
           {/* Información básica */}
-          <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
+          <IonCard style={{ 
+            borderRadius: '12px', 
+            marginBottom: '20px',
+            boxShadow: 'none',
+            border: '1px solid var(--ion-color-light-shade)'
+          }}>
             <IonCardHeader style={{ paddingBottom: '10px' }}>
               <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-primary)' }}>
                 <IonIcon icon={informationCircle} style={{ marginRight: '8px' }} />
@@ -372,7 +384,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
               <IonGrid>
                 <IonRow>
                   <IonCol size="12" sizeMd="6">
-                    <IonItem>
+                    <IonItem style={{ '--background': 'transparent' }}>
                       <IonLabel position="stacked">Número de gasto</IonLabel>
                       <IonInput
                         placeholder="Se generará automáticamente"
@@ -382,7 +394,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                     </IonItem>
                   </IonCol>
                   <IonCol size="12" sizeMd="6">
-                    <IonItem>
+                    <IonItem style={{ '--background': 'transparent' }}>
                       <IonLabel position="stacked">Fecha *</IonLabel>
                       <IonDatetime
                         value={formData.date}
@@ -404,7 +416,12 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
 
           {/* Formulario para gastos de productos */}
           {formData.type === 'product' && (
-            <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
+            <IonCard style={{ 
+              borderRadius: '12px', 
+              marginBottom: '20px',
+              boxShadow: 'none',
+              border: '1px solid var(--ion-color-success-tint)'
+            }}>
               <IonCardHeader style={{ paddingBottom: '10px' }}>
                 <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-success)' }}>
                   <IonIcon icon={storefront} style={{ marginRight: '8px' }} />
@@ -415,7 +432,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                 <IonGrid>
                   <IonRow>
                     <IonCol size="12">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Producto *</IonLabel>
                         <IonSelect
                           value={formData.productId}
@@ -439,7 +456,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                   
                   <IonRow>
                     <IonCol size="12" sizeMd="4">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Cantidad vendida *</IonLabel>
                         <IonInput
                           type="number"
@@ -458,7 +475,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                     </IonCol>
                     
                     <IonCol size="12" sizeMd="4">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Precio unitario *</IonLabel>
                         <IonInput
                           type="number"
@@ -477,7 +494,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                     </IonCol>
                     
                     <IonCol size="12" sizeMd="4">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Total</IonLabel>
                         <IonInput
                           type="number"
@@ -493,7 +510,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                   
                   <IonRow>
                     <IonCol size="12">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Motivo de la venta</IonLabel>
                         <IonTextarea
                           placeholder="Descripción del motivo de venta..."
@@ -511,7 +528,12 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
 
           {/* Formulario para gastos varios */}
           {formData.type === 'misc' && (
-            <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
+            <IonCard style={{ 
+              borderRadius: '12px', 
+              marginBottom: '20px',
+              boxShadow: 'none',
+              border: '1px solid var(--ion-color-warning-tint)'
+            }}>
               <IonCardHeader style={{ paddingBottom: '10px' }}>
                 <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-warning)' }}>
                   <IonIcon icon={receipt} style={{ marginRight: '8px' }} />
@@ -522,7 +544,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                 <IonGrid>
                   <IonRow>
                     <IonCol size="12" sizeMd="6">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Categoría *</IonLabel>
                         <IonSelect
                           value={formData.category}
@@ -539,7 +561,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                     </IonCol>
                     
                     <IonCol size="12" sizeMd="6">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Importe *</IonLabel>
                         <IonInput
                           type="number"
@@ -560,7 +582,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                   
                   <IonRow>
                     <IonCol size="12">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Descripción *</IonLabel>
                         <IonTextarea
                           placeholder="Descripción detallada del gasto..."
@@ -579,7 +601,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
                   
                   <IonRow>
                     <IonCol size="12">
-                      <IonItem>
+                      <IonItem style={{ '--background': 'transparent' }}>
                         <IonLabel position="stacked">Proveedor</IonLabel>
                         <IonInput
                           placeholder="Nombre del proveedor..."
@@ -595,14 +617,19 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
           )}
 
           {/* Notas adicionales */}
-          <IonCard style={{ borderRadius: '16px', marginBottom: '20px' }}>
+          <IonCard style={{ 
+            borderRadius: '12px', 
+            marginBottom: '20px',
+            boxShadow: 'none',
+            border: '1px solid var(--ion-color-light-shade)'
+          }}>
             <IonCardHeader style={{ paddingBottom: '10px' }}>
               <IonCardTitle style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ion-color-medium)' }}>
                 Notas adicionales
               </IonCardTitle>
             </IonCardHeader>
             <IonCardContent>
-              <IonItem>
+              <IonItem style={{ '--background': 'transparent' }}>
                 <IonLabel position="stacked">Observaciones</IonLabel>
                 <IonTextarea
                   placeholder="Cualquier información adicional relevante..."
@@ -626,7 +653,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
               expand="block"
               onClick={onClose}
               disabled={submitting}
-              style={{ flex: 1, '--border-radius': '12px' }}
+              style={{ flex: 1, '--border-radius': '8px' }}
             >
               Cancelar
             </IonButton>
@@ -635,7 +662,7 @@ const ExpenseDialog: React.FC<ExpenseDialogProps> = ({
               expand="block"
               onClick={handleSubmit}
               disabled={submitting}
-              style={{ flex: 2, '--border-radius': '12px' }}
+              style={{ flex: 2, '--border-radius': '8px' }}
             >
               {submitting ? (
                 <>

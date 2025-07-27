@@ -1,5 +1,5 @@
 // src/controllers/ExpensesController.tsx - Controlador para gastos con logging de actividades
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useExpenses } from '../contexts/ExpenseContext';
 import { useStock } from '../contexts/StockContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -105,7 +105,7 @@ const useExpensesController = (): UseExpensesControllerReturn => {
   } = useExpenses();
   
   const {
-    products = [],
+    products,
     loading: productsLoading,
     error: productsError,
     loadProducts
@@ -114,56 +114,54 @@ const useExpensesController = (): UseExpensesControllerReturn => {
   const { currentUser } = useAuth();
   const { logExpense } = useActivityLogger();
 
-  // Convertir gastos del stock a nuestro tipo local
-  const expenses: ControllerExpense[] = stockExpenses.map(expense => {
-    const expenseAny = expense as any;
-    
-    const baseExpense: ControllerExpense = {
-      id: expenseAny.id || '',
-      expenseNumber: expenseAny.expenseNumber,
-      type: expenseAny.type || 'misc',
-      date: expenseAny.date,
-      amount: expenseAny.amount,
-      totalAmount: expenseAny.totalAmount,
-      category: expenseAny.category,
-      productCategory: expenseAny.productCategory,
-      productName: expenseAny.productName,
-      productId: expenseAny.productId,
-      supplier: expenseAny.supplier,
-      description: expenseAny.description,
-      quantitySold: expenseAny.quantitySold,
-      unitPrice: expenseAny.unitPrice,
-      saleReason: expenseAny.saleReason,
-      notes: expenseAny.notes,
-      createdBy: expenseAny.createdBy,
-      stockAdjusted: expenseAny.stockAdjusted,
-      createdAt: expenseAny.createdAt,
-      updatedAt: expenseAny.updatedAt
-    };
-    
-    return baseExpense;
-  });
-
   // Estados locales
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [selectedExpense, setSelectedExpense] = useState<ControllerExpense | null>(null);
-  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
-  const [dialogType, setDialogType] = useState<string>(''); // 'add-expense', 'edit-expense', 'view-expense'
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogType, setDialogType] = useState('');
   const [filters, setFilters] = useState<Filters>({
     type: 'all',
     category: 'all',
-    dateRange: { start: null, end: null },
+    dateRange: {
+      start: null,
+      end: null
+    },
     searchTerm: ''
   });
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>('');
-  const [filteredExpensesList, setFilteredExpensesList] = useState<ControllerExpense[]>([]);
 
-  // Cargar datos necesarios
+  // Convertir gastos del contexto al formato del controlador
+  const expenses: ControllerExpense[] = useMemo(() => {
+    if (!Array.isArray(stockExpenses)) return [];
+    return stockExpenses.map((expense: any) => ({
+      ...expense,
+      id: expense.id || '',
+      type: expense.type || 'misc',
+      date: expense.date,
+      amount: expense.amount,
+      totalAmount: expense.totalAmount,
+      category: expense.category,
+      productCategory: expense.productCategory,
+      productName: expense.productName,
+      productId: expense.productId,
+      supplier: expense.supplier,
+      description: expense.description,
+      quantitySold: expense.quantitySold,
+      unitPrice: expense.unitPrice,
+      saleReason: expense.saleReason,
+      notes: expense.notes,
+      createdBy: expense.createdBy,
+      stockAdjusted: expense.stockAdjusted,
+      expenseNumber: expense.expenseNumber,
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt
+    }));
+  }, [stockExpenses]);
+
+  // Función para cargar datos
   const loadData = useCallback(async (): Promise<void> => {
     try {
       setError('');
-      
-      // Cargar productos y gastos
       await Promise.all([
         products.length === 0 ? loadProducts() : Promise.resolve(),
         loadExpenses()
@@ -172,7 +170,7 @@ const useExpensesController = (): UseExpensesControllerReturn => {
       console.error('Error al cargar datos:', err);
       setError('Error al cargar datos: ' + err.message);
     }
-  }, [loadProducts, loadExpenses, products.length]);
+  }, [loadProducts, loadExpenses]); // CORREGIDO: eliminado products.length
 
   // Actualizar estado de carga y error
   useEffect(() => {
@@ -194,8 +192,8 @@ const useExpensesController = (): UseExpensesControllerReturn => {
     loadData();
   }, [loadData]);
 
-  // Filtrar gastos según filtros aplicados
-  const getFilteredExpenses = useCallback((): ControllerExpense[] => {
+  // CORREGIDO: Filtrar gastos con useMemo en lugar de useEffect
+  const filteredExpenses = useMemo((): ControllerExpense[] => {
     if (!Array.isArray(expenses) || expenses.length === 0) return [];
     
     return expenses.filter((expense: ControllerExpense) => {
@@ -252,12 +250,7 @@ const useExpensesController = (): UseExpensesControllerReturn => {
       
       return true;
     });
-  }, [expenses, filters]);
-
-  // Actualizar lista filtrada cuando cambien los gastos o filtros
-  useEffect(() => {
-    setFilteredExpensesList(getFilteredExpenses());
-  }, [getFilteredExpenses]);
+  }, [expenses, filters]); // CORREGIDO: useMemo con dependencias específicas
 
   // Abrir diálogo para agregar gasto
   const handleAddExpense = useCallback((): void => {
@@ -280,91 +273,28 @@ const useExpensesController = (): UseExpensesControllerReturn => {
     setDialogOpen(true);
   }, []);
 
-  // Eliminar gasto
-  const handleDeleteExpense = useCallback(async (expenseId: string): Promise<void> => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer.')) {
-      try {
-        setError('');
-        
-        // Buscar el gasto antes de eliminarlo para el logging
-        const expenseToDelete = expenses.find((exp: ControllerExpense) => exp.id === expenseId);
-        
-        await deleteExpense(expenseId);
-        
-        // NUEVO: Registrar actividad de eliminación
-        if (expenseToDelete) {
-          await logExpense('delete', {
-            id: expenseId,
-            expenseNumber: expenseToDelete.expenseNumber || 'Sin número',
-            type: expenseToDelete.type
-          }, {
-            amount: expenseToDelete.type === 'product' ? expenseToDelete.totalAmount : expenseToDelete.amount,
-            category: expenseToDelete.type === 'product' ? expenseToDelete.productCategory : expenseToDelete.category,
-            productName: expenseToDelete.productName,
-            supplier: expenseToDelete.supplier,
-            description: expenseToDelete.description,
-            deletedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido'
-          });
-        }
-        
-        if (selectedExpense && selectedExpense.id === expenseId) {
-          setDialogOpen(false);
-        }
-        
-        // Recargar datos
-        await loadData();
-      } catch (err: any) {
-        console.error('Error al eliminar gasto:', err);
-        setError('Error al eliminar gasto: ' + err.message);
-      }
-    }
-  }, [expenses, deleteExpense, logExpense, currentUser, selectedExpense, loadData]);
-
-  // NUEVO: Función para detectar cambios entre gastos
-  const detectExpenseChanges = useCallback((currentExpense: ControllerExpense, newData: Partial<ControllerExpense>): ExpenseChange[] => {
+  // Función para detectar cambios en gastos
+  const detectExpenseChanges = useCallback((oldExpense: ControllerExpense, newData: Partial<ControllerExpense>): ExpenseChange[] => {
     const changes: ExpenseChange[] = [];
     
-    const fieldsToMonitor: Record<string, string> = {
-      description: 'Descripción',
-      supplier: 'Proveedor',
-      productName: 'Producto',
-      quantitySold: 'Cantidad vendida',
-      unitPrice: 'Precio unitario',
-      notes: 'Notas',
-      saleReason: 'Razón de venta'
-    };
-    
-    for (const [field, label] of Object.entries(fieldsToMonitor)) {
-      const oldValue = (currentExpense as any)[field];
-      const newValue = (newData as any)[field];
-      
-      if (oldValue !== newValue && !(oldValue == null && newValue == null)) {
-        changes.push({
-          field,
-          label,
-          oldValue: formatExpenseValue(oldValue, field),
-          newValue: formatExpenseValue(newValue, field),
-          type: getExpenseChangeType(field, oldValue, newValue)
-        });
-      }
-    }
-    
-    // Cambios en monto
-    const oldAmount = currentExpense.type === 'product' ? currentExpense.totalAmount : currentExpense.amount;
+    // Detectar cambios en importe
+    const oldAmount = oldExpense.type === 'product' ? oldExpense.totalAmount : oldExpense.amount;
     const newAmount = newData.type === 'product' ? newData.totalAmount : newData.amount;
+    
     if (oldAmount !== newAmount) {
       changes.push({
         field: 'amount',
-        label: 'Monto',
-        oldValue: `$${oldAmount || 0}`,
-        newValue: `$${newAmount || 0}`,
+        label: 'Importe',
+        oldValue: oldAmount?.toString() || '0',
+        newValue: newAmount?.toString() || '0',
         type: (newAmount || 0) > (oldAmount || 0) ? 'increase' : 'decrease'
       });
     }
     
-    // Cambios en categoría
-    const oldCategory = currentExpense.type === 'product' ? currentExpense.productCategory : currentExpense.category;
+    // Detectar cambios en categoría
+    const oldCategory = oldExpense.type === 'product' ? oldExpense.productCategory : oldExpense.category;
     const newCategory = newData.type === 'product' ? newData.productCategory : newData.category;
+    
     if (oldCategory !== newCategory) {
       changes.push({
         field: 'category',
@@ -375,57 +305,10 @@ const useExpensesController = (): UseExpensesControllerReturn => {
       });
     }
     
-    // Cambios en fecha
-    const oldDate = currentExpense.date 
-      ? new Date(currentExpense.date.seconds ? currentExpense.date.seconds * 1000 : currentExpense.date)
-      : null;
-    const newDate = newData.date 
-      ? new Date(newData.date.seconds ? newData.date.seconds * 1000 : newData.date)
-      : null;
-      
-    if (oldDate && newDate && oldDate.getTime() !== newDate.getTime()) {
-      changes.push({
-        field: 'date',
-        label: 'Fecha',
-        oldValue: oldDate.toLocaleDateString('es-ES'),
-        newValue: newDate.toLocaleDateString('es-ES'),
-        type: 'date'
-      });
-    }
-    
     return changes;
   }, []);
 
-  // NUEVO: Función para formatear valores según el tipo de campo
-  const formatExpenseValue = (value: any, field: string): string => {
-    if (value == null) return 'Sin definir';
-    
-    switch (field) {
-      case 'quantitySold':
-        return `${value} unidades`;
-      case 'unitPrice':
-        return `$${value}`;
-      default:
-        return String(value);
-    }
-  };
-
-  // NUEVO: Función para determinar el tipo de cambio
-  const getExpenseChangeType = (field: string, oldValue: any, newValue: any): string => {
-    switch (field) {
-      case 'quantitySold':
-      case 'unitPrice':
-        const oldNum = Number(oldValue) || 0;
-        const newNum = Number(newValue) || 0;
-        if (newNum > oldNum) return 'increase';
-        if (newNum < oldNum) return 'decrease';
-        return 'update';
-      default:
-        return 'update';
-    }
-  };
-
-  // NUEVO: Función para generar resumen de cambios
+  // Función para generar resumen de cambios
   const generateExpenseChangesSummary = (changes: ExpenseChange[]): string => {
     const summaryParts: string[] = [];
     
@@ -480,7 +363,7 @@ const useExpensesController = (): UseExpensesControllerReturn => {
         // Crear nuevo gasto
         expenseId = await addExpense(contextExpenseData);
         
-        // NUEVO: Registrar actividad de creación
+        // Registrar actividad de creación
         await logExpense('create', {
           id: expenseId,
           expenseNumber: expenseData.expenseNumber || 'Generado automáticamente',
@@ -523,7 +406,7 @@ const useExpensesController = (): UseExpensesControllerReturn => {
         // Actualizar gasto existente
         expenseId = await updateExpense(selectedExpense.id, contextExpenseData);
         
-        // NUEVO: Registrar actividad de actualización con detección de cambios
+        // Registrar actividad de actualización con detección de cambios
         const changes = detectExpenseChanges(selectedExpense, expenseData);
         
         await logExpense('update', {
@@ -559,6 +442,43 @@ const useExpensesController = (): UseExpensesControllerReturn => {
       throw err;
     }
   }, [dialogType, selectedExpense, addExpense, updateExpense, logExpense, currentUser, loadData, detectExpenseChanges]);
+
+  // Eliminar gasto
+  const handleDeleteExpense = useCallback(async (expenseId: string): Promise<void> => {
+    if (window.confirm('¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer.')) {
+      try {
+        setError('');
+        
+        // Buscar el gasto antes de eliminarlo para el logging
+        const expenseToDelete = expenses.find((exp: ControllerExpense) => exp.id === expenseId);
+        
+        await deleteExpense(expenseId);
+        
+        // Registrar actividad de eliminación
+        if (expenseToDelete) {
+          await logExpense('delete', {
+            id: expenseId,
+            expenseNumber: expenseToDelete.expenseNumber || 'Sin número',
+            type: expenseToDelete.type
+          }, {
+            amount: expenseToDelete.type === 'product' ? expenseToDelete.totalAmount : expenseToDelete.amount,
+            category: expenseToDelete.type === 'product' ? expenseToDelete.productCategory : expenseToDelete.category,
+            productName: expenseToDelete.productName,
+            supplier: expenseToDelete.supplier,
+            description: expenseToDelete.description,
+            deletedBy: currentUser?.displayName || currentUser?.email || 'Usuario desconocido',
+            notes: expenseToDelete.notes
+          });
+        }
+        
+        await loadData();
+      } catch (err: any) {
+        console.error('Error al eliminar gasto:', err);
+        setError('Error al eliminar gasto: ' + err.message);
+        throw err;
+      }
+    }
+  }, [deleteExpense, expenses, logExpense, currentUser, loadData]);
 
   // Cambiar filtros
   const handleFilterChange = useCallback((filterName: string, value: any): void => {
@@ -671,7 +591,7 @@ const useExpensesController = (): UseExpensesControllerReturn => {
   };
 
   return {
-    expenses: filteredExpensesList,
+    expenses: filteredExpenses, // CORREGIDO: usar filteredExpenses calculado con useMemo
     products: Array.isArray(products) ? products : [],
     loading,
     error,
