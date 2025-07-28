@@ -1,5 +1,5 @@
-// src/controllers/ProductsController.tsx - Controlador para productos con logging de actividades
-import { useState, useEffect, useCallback } from 'react';
+// src/controllers/ProductsController.tsx - Controlador para productos CORREGIDO (sin problemas de scroll)
+import { useState, useEffect, useCallback, useMemo } from 'react'; // AGREGADO useMemo
 import { useStock } from '../contexts/StockContext';
 import { useActivityLogger } from '../hooks/useActivityLogger';
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp, getDoc } from 'firebase/firestore';
@@ -137,7 +137,8 @@ const useProductsController = (): UseProductsControllerReturn => {
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
-  const [filteredProductsList, setFilteredProductsList] = useState<ControllerProduct[]>([]);
+
+  // ELIMINADO: const [filteredProductsList, setFilteredProductsList] = useState<ControllerProduct[]>([]);
 
   // Effect para manejar filtros desde URL
   useEffect(() => {
@@ -155,6 +156,72 @@ const useProductsController = (): UseProductsControllerReturn => {
       window.history.replaceState({}, '', newUrl);
     }
   }, []);
+
+  // SOLUCIÓN: Usar useMemo en lugar de useState + useEffect para evitar re-renders
+  const filteredProducts = useMemo((): ControllerProduct[] => {
+    if (!Array.isArray(products) || products.length === 0) return [];
+    
+    return products.filter(product => {
+      // Filtro por categoría
+      if (filters.category !== 'all' && product.category !== filters.category) {
+        return false;
+      }
+      
+      // Filtro por estado de stock
+      if (filters.stockStatus !== 'all') {
+        const stock = product.stock || 0;
+        const minStock = product.minStock || 0;
+        
+        switch (filters.stockStatus) {
+          case 'low':
+            if (stock > minStock) return false;
+            break;
+          case 'normal':
+            if (stock <= minStock || stock === 0) return false;
+            break;
+          case 'zero':
+            if (stock !== 0) return false;
+            break;
+        }
+      }
+      
+      // Filtro por campo
+      if (filters.fieldId !== 'all' && product.fieldId !== filters.fieldId) {
+        return false;
+      }
+      
+      // Filtro por productos próximos a vencer
+      if (filters.expiringSoon) {
+        if (!product.expirationDate) return false;
+        
+        const expirationDate = new Date(product.expirationDate.seconds ? 
+          product.expirationDate.seconds * 1000 : 
+          product.expirationDate);
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        
+        if (expirationDate.getTime() > thirtyDaysFromNow.getTime()) return false;
+      }
+      
+      // Filtro por término de búsqueda
+      if (filters.searchTerm) {
+        const term = filters.searchTerm.toLowerCase();
+        return (
+          (product.name && product.name.toLowerCase().includes(term)) ||
+          (product.code && product.code.toLowerCase().includes(term)) ||
+          (product.category && product.category.toLowerCase().includes(term)) ||
+          (product.lotNumber && product.lotNumber.toLowerCase().includes(term))
+        );
+      }
+      
+      return true;
+    });
+  }, [products, filters]); // Solo depende de products y filters
+
+  // ELIMINADO: useEffect problemático que causaba re-renders
+  // useEffect(() => {
+  //   setFilteredProductsList(getFilteredProducts());
+  // }, [getFilteredProducts]);
 
   // Función para añadir un producto con logging
   const addProduct = useCallback(async (productData: Partial<ControllerProduct>): Promise<string> => {
@@ -499,72 +566,6 @@ const useProductsController = (): UseProductsControllerReturn => {
     loadData();
   }, [loadData]);
 
-  // Filtrar productos según filtros aplicados
-  const getFilteredProducts = useCallback((): ControllerProduct[] => {
-    if (!Array.isArray(products) || products.length === 0) return [];
-    
-    return products.filter(product => {
-      // Filtro por categoría
-      if (filters.category !== 'all' && product.category !== filters.category) {
-        return false;
-      }
-      
-      // Filtro por estado de stock
-      if (filters.stockStatus !== 'all') {
-        const stock = product.stock || 0;
-        const minStock = product.minStock || 0;
-        
-        switch (filters.stockStatus) {
-          case 'low':
-            if (stock > minStock) return false;
-            break;
-          case 'normal':
-            if (stock <= minStock || stock === 0) return false;
-            break;
-          case 'zero':
-            if (stock !== 0) return false;
-            break;
-        }
-      }
-      
-      // Filtro por campo
-      if (filters.fieldId !== 'all' && product.fieldId !== filters.fieldId) {
-        return false;
-      }
-      
-      // Filtro por productos próximos a vencer
-      if (filters.expiringSoon) {
-        if (!product.expirationDate) return false;
-        
-        const expirationDate = new Date(product.expirationDate.seconds ? 
-          product.expirationDate.seconds * 1000 : 
-          product.expirationDate);
-        const thirtyDaysFromNow = new Date();
-        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-        
-        if (expirationDate > thirtyDaysFromNow) return false;
-      }
-      
-      // Filtro por término de búsqueda
-      if (filters.searchTerm) {
-        const term = filters.searchTerm.toLowerCase();
-        return (
-          (product.name && product.name.toLowerCase().includes(term)) ||
-          (product.code && product.code.toLowerCase().includes(term)) ||
-          (product.category && product.category.toLowerCase().includes(term)) ||
-          (product.lotNumber && product.lotNumber.toLowerCase().includes(term))
-        );
-      }
-      
-      return true;
-    });
-  }, [products, filters]);
-
-  // Actualizar productos filtrados cuando cambian los filtros o productos
-  useEffect(() => {
-    setFilteredProductsList(getFilteredProducts());
-  }, [getFilteredProducts]);
-
   // Abrir diálogo para añadir producto
   const handleAddProduct = useCallback((): void => {
     setSelectedProduct(null);
@@ -624,20 +625,32 @@ const useProductsController = (): UseProductsControllerReturn => {
     }
   }, [dialogType, selectedProduct, addProduct, updateProduct, loadData]);
 
-  // Cambiar filtros
+  // Cambiar filtros - OPTIMIZADO para evitar re-renders innecesarios
   const handleFilterChange = useCallback((filterName: string, value: any): void => {
-    setFilters(prev => ({
-      ...prev,
-      [filterName]: value
-    }));
+    setFilters(prev => {
+      // Solo actualizar si el valor realmente cambió
+      if (prev[filterName as keyof Filters] === value) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [filterName]: value
+      };
+    });
   }, []);
 
-  // Buscar por texto
+  // Buscar por texto - OPTIMIZADO para evitar re-renders innecesarios
   const handleSearch = useCallback((searchTerm: string): void => {
-    setFilters(prev => ({
-      ...prev,
-      searchTerm
-    }));
+    setFilters(prev => {
+      // Solo actualizar si el término realmente cambió
+      if (prev.searchTerm === searchTerm) {
+        return prev;
+      }
+      return {
+        ...prev,
+        searchTerm
+      };
+    });
   }, []);
 
   // Cerrar diálogo
@@ -655,8 +668,8 @@ const useProductsController = (): UseProductsControllerReturn => {
     }));
   }, []);
 
-  // Obtener categorías únicas para filtros
-  const getUniqueCategories = useCallback((): string[] => {
+  // Obtener categorías únicas para filtros - OPTIMIZADO con useMemo
+  const getUniqueCategories = useMemo((): string[] => {
     const categories = new Set<string>();
     
     products.forEach(product => {
@@ -668,11 +681,11 @@ const useProductsController = (): UseProductsControllerReturn => {
     return Array.from(categories).sort();
   }, [products]);
 
-  // Opciones para filtros
-  const filterOptions: FilterOptions = {
+  // Opciones para filtros - OPTIMIZADO con useMemo
+  const filterOptions: FilterOptions = useMemo(() => ({
     category: [
       { value: 'all', label: 'Todas las categorías' },
-      ...getUniqueCategories().map(category => ({ value: category, label: category }))
+      ...getUniqueCategories.map(category => ({ value: category, label: category }))
     ],
     stockStatus: [
       { value: 'all', label: 'Todos los estados' },
@@ -684,10 +697,10 @@ const useProductsController = (): UseProductsControllerReturn => {
       { value: 'all', label: 'Todos los campos' },
       ...fields.map((field: any) => ({ value: field.id, label: field.name }))
     ]
-  };
+  }), [getUniqueCategories, fields]);
 
   return {
-    products: filteredProductsList,
+    products: filteredProducts, // CORREGIDO: usar filteredProducts en lugar de filteredProductsList
     fields: Array.isArray(fields) ? fields : [],
     warehouses: Array.isArray(warehouses) ? warehouses : [],
     loading,

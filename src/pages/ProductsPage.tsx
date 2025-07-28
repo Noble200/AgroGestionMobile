@@ -1,37 +1,85 @@
+// src/pages/ProductsPage.tsx - Página principal de productos
 import React from 'react';
-import {
-  IonContent,
-  IonHeader,
-  IonPage,
-  IonTitle,
-  IonToolbar,
-  IonCard,
-  IonCardContent,
-  IonIcon,
-  IonButton
-} from '@ionic/react';
-import { cube, construct } from 'ionicons/icons';
+import ProductsPanel from '../components/panels/Products/ProductsPanel';
+import useProductsController from '../controllers/ProductsController';
 
-export const ProductsPage: React.FC = () => {
+const ProductsPage: React.FC = () => {
+  const {
+    products,
+    fields,
+    warehouses,
+    loading,
+    error,
+    selectedProduct,
+    dialogOpen,
+    dialogType,
+    filterOptions,
+    filters,
+    handleAddProduct,
+    handleEditProduct,
+    handleViewProduct,
+    handleDeleteProduct,
+    handleSaveProduct,
+    handleFilterChange,
+    handleSearch,
+    handleCloseDialog,
+    clearSpecialFilters,
+    refreshData
+  } = useProductsController();
+
+  // Calcular estadísticas desde los productos
+  const statistics = {
+    totalProducts: products.length,
+    lowStockProducts: products.filter(p => {
+      const stock = p.stock || 0;
+      const minStock = p.minStock || 0;
+      return stock <= minStock && minStock > 0;
+    }).length,
+    expiringSoonProducts: products.filter(p => {
+      if (!p.expirationDate) return false;
+      
+      try {
+        const expiryDate = p.expirationDate.seconds 
+          ? new Date(p.expirationDate.seconds * 1000) 
+          : new Date(p.expirationDate);
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        return expiryDate.getTime() <= thirtyDaysFromNow.getTime();
+      } catch (error) {
+        return false;
+      }
+    }).length,
+    totalValue: products.reduce((total, p) => {
+      const cost = p.cost || 0;
+      const stock = p.stock || 0;
+      return total + (cost * stock);
+    }, 0)
+  };
+
   return (
-    <IonPage className="agrogestion-page">
-      <IonHeader className="agrogestion-header">
-        <IonToolbar>
-          <IonTitle>Productos</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent>
-        <div className="empty-state">
-          <IonIcon icon={cube} />
-          <h3>Gestión de Productos</h3>
-          <p>Esta sección está en desarrollo y pronto estará disponible para gestionar tu inventario de productos agrícolas.</p>
-          <IonButton className="agro-button">
-            <IonIcon icon={construct} slot="start" />
-            Próximamente
-          </IonButton>
-        </div>
-      </IonContent>
-    </IonPage>
+    <ProductsPanel
+      products={products}
+      fields={fields}
+      warehouses={warehouses}
+      loading={loading}
+      error={error}
+      selectedProduct={selectedProduct}
+      dialogOpen={dialogOpen}
+      dialogType={dialogType}
+      filterOptions={filterOptions}
+      filters={filters}
+      statistics={statistics}
+      handleAddProduct={handleAddProduct}
+      handleEditProduct={handleEditProduct}
+      handleViewProduct={handleViewProduct}
+      handleDeleteProduct={handleDeleteProduct}
+      handleSaveProduct={handleSaveProduct}
+      handleFilterChange={handleFilterChange}
+      handleSearch={handleSearch}
+      handleCloseDialog={handleCloseDialog}
+      clearSpecialFilters={clearSpecialFilters}
+      refreshData={refreshData}
+    />
   );
 };
 
