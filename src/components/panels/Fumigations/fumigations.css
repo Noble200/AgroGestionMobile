@@ -1,0 +1,1855 @@
+/* src/components/panels/Fumigations/fumigations.css - Estilos para fumigaciones */
+
+/* Contenedor principal */
+.fumigations-container {
+  padding: var(--spacing-md);
+}
+
+/* Encabezado */
+.fumigations-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.fumigations-title {
+  font-size: var(--font-size-xxl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.fumigations-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+/* Panel de filtros */
+.filters-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-xl);
+  background-color: var(--bg-paper);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-md);
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.filters-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  flex: 1;
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 150px;
+}
+
+.filter-item label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.filter-item.date-range {
+  min-width: 280px;
+}
+
+.date-inputs {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.date-inputs span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.search-container {
+  flex: 1;
+  max-width: 300px;
+  min-width: 250px;
+}
+
+.search-input {
+  position: relative;
+  width: 100%;
+}
+
+.search-input i {
+  position: absolute;
+  left: var(--spacing-md);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+}
+
+.search-input input {
+  padding-left: 36px;
+  width: 100%;
+  height: 40px;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--gray-300);
+  transition: all var(--transition-fast);
+}
+
+.search-input input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+  outline: none;
+}
+
+/* Grid de fumigaciones */
+.fumigations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: var(--spacing-xl);
+  margin-bottom: var(--spacing-xl);
+}
+
+/* Tarjeta de fumigación */
+.fumigation-card {
+  background-color: var(--bg-paper);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  position: relative;
+}
+
+.fumigation-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.fumigation-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 4px;
+  width: 100%;
+  background-color: var(--primary);
+}
+
+.fumigation-card.pending::before {
+  background-color: var(--warning);
+}
+
+.fumigation-card.scheduled::before {
+  background-color: var(--info);
+}
+
+.fumigation-card.in_progress::before {
+  background-color: var(--primary);
+}
+
+.fumigation-card.completed::before {
+  background-color: var(--success);
+}
+
+.fumigation-card.cancelled::before {
+  background-color: var(--danger);
+}
+
+.fumigation-header {
+  padding: var(--spacing-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.fumigation-title-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+}
+
+.fumigation-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--border-radius-lg);
+  background-color: rgba(0, 150, 136, 0.1);
+  color: #009688;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.fumigation-info {
+  flex: 1;
+}
+
+.fumigation-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--spacing-xs) 0;
+  color: var(--text-primary);
+}
+
+.fumigation-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+/* Contenido de la tarjeta */
+.fumigation-content {
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.fumigation-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.fumigation-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxs);
+}
+
+.detail-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Productos en fumigación */
+.fumigation-products {
+  background-color: var(--gray-50);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+}
+
+.products-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-sm) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.products-title i {
+  color: #009688;
+}
+
+.products-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.product-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--bg-paper);
+  border-radius: var(--border-radius-sm);
+}
+
+.product-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxs);
+}
+
+.product-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.product-dose {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.product-total {
+  text-align: right;
+}
+
+.product-quantity {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--primary);
+}
+
+/* Barra de progreso */
+.fumigation-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: var(--gray-200);
+  border-radius: var(--border-radius-pill);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--primary);
+  transition: width var(--transition-medium);
+  border-radius: var(--border-radius-pill);
+}
+
+.fumigation-card.pending .progress-fill {
+  background-color: var(--warning);
+}
+
+.fumigation-card.completed .progress-fill {
+  background-color: var(--success);
+}
+
+.fumigation-card.cancelled .progress-fill {
+  background-color: var(--danger);
+}
+
+.progress-text {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Acciones de fumigación */
+.fumigation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  justify-content: flex-start;
+}
+
+/* Estados de fumigación (chips) */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-xxs) var(--spacing-sm);
+  border-radius: var(--border-radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-chip.status-pending {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: var(--warning);
+}
+
+.status-chip.status-scheduled {
+  background-color: rgba(33, 150, 243, 0.1);
+  color: var(--info);
+}
+
+.status-chip.status-in-progress {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: var(--primary);
+}
+
+.status-chip.status-completed {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: var(--success);
+}
+
+.status-chip.status-cancelled {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: var(--danger);
+}
+
+/* Diálogo de fumigación */
+.fumigation-dialog {
+  max-width: 1000px !important;
+}
+
+.fumigation-detail-dialog {
+  max-width: 900px !important;
+}
+
+.complete-fumigation-dialog {
+  max-width: 800px !important;
+}
+
+/* Secciones del formulario */
+.form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.form-section {
+  padding: var(--spacing-md);
+  background-color: var(--gray-50);
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--gray-200);
+}
+
+.section-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-md) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.section-title i {
+  color: var(--primary);
+}
+
+/* Productos seleccionados */
+.selected-products {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.selected-product-item {
+  background-color: var(--bg-paper);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.selected-product-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-md);
+}
+
+.selected-product-name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.selected-product-dose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.dose-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.unit-conversion {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-style: italic;
+  margin-left: var(--spacing-sm);
+}
+
+.total-calculation {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background-color: var(--primary-bg);
+  border-radius: var(--border-radius-sm);
+  border-left: 3px solid var(--primary);
+}
+
+.dose-calculation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxs);
+  margin-bottom: var(--spacing-xs);
+}
+
+.conversion-display {
+  font-size: var(--font-size-xs);
+  color: var(--primary);
+  font-style: italic;
+}
+
+.total-needed {
+  font-size: var(--font-size-sm);
+  color: var(--primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Botón de PDF */
+.pdf-button {
+  background-color: var(--danger);
+  color: var(--text-white);
+  border: none;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.pdf-button:hover {
+  background-color: #d32f2f;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.pdf-button:active {
+  transform: translateY(0);
+}
+
+.pdf-button i {
+  font-size: var(--font-size-md);
+}
+
+/* Mejoras para el selector de productos */
+.product-selector-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.dose-inputs {
+  border-top: 1px solid var(--gray-200);
+  padding-top: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.input-group {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: stretch;
+}
+
+.input-group input {
+  flex: 2;
+}
+
+.input-group select {
+  flex: 1;
+  min-width: 100px;
+}
+
+/* Mejoras para la lista de productos seleccionados */
+.selected-product-item {
+  border-left: 3px solid var(--primary);
+  transition: all var(--transition-fast);
+}
+
+.selected-product-item:hover {
+  border-left-color: var(--primary-dark);
+  box-shadow: var(--shadow-sm);
+}
+
+.product-dose {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+/* Información de volumen total */
+.volume-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background-color: var(--info-bg);
+  border-radius: var(--border-radius-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.volume-info i {
+  color: var(--info);
+  font-size: var(--font-size-lg);
+}
+
+.volume-text {
+  font-size: var(--font-size-sm);
+  color: var(--info);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Estilos para el diálogo de vista PDF */
+.pdf-preview-dialog {
+  max-width: 900px !important;
+}
+
+.pdf-preview-container {
+  height: 600px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  background-color: var(--gray-50);
+}
+
+.pdf-preview-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.pdf-preview-loading .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--gray-200);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.pdf-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  justify-content: flex-end;
+}
+
+/* Información adicional en tarjetas de fumigación */
+.fumigation-conversion-info {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xxs);
+  font-style: italic;
+}
+
+/* Mejoras responsivas */
+@media (max-width: 768px) {
+  .dose-calculation {
+    flex-direction: column;
+  }
+  
+  .input-group {
+    flex-direction: column;
+  }
+  
+  .input-group input,
+  .input-group select {
+    width: 100%;
+    flex: none;
+  }
+  
+  .pdf-preview-container {
+    height: 400px;
+  }
+  
+  .pdf-actions {
+    flex-direction: column;
+  }
+  
+  .pdf-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Animaciones para conversiones */
+@keyframes fadeInConversion {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.conversion-display,
+.dose-conversion {
+  animation: fadeInConversion 0.3s ease-out;
+}
+
+/* Estilos para diferentes estados de las conversiones */
+.conversion-exact {
+  color: var(--success);
+}
+
+.conversion-approximate {
+  color: var(--warning);
+}
+
+.conversion-warning {
+  color: var(--danger);
+}
+
+/* Tooltip para conversiones */
+.conversion-tooltip {
+  position: relative;
+  cursor: help;
+}
+
+.conversion-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--gray-900);
+  color: var(--text-white);
+  font-size: var(--font-size-xs);
+  border-radius: var(--border-radius-sm);
+  white-space: nowrap;
+  z-index: var(--z-index-tooltip);
+  opacity: 0.9;
+}
+
+/* Indicadores visuales para stock */
+.stock-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-xxs) var(--spacing-xs);
+  border-radius: var(--border-radius-sm);
+}
+
+.stock-indicator.sufficient {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: var(--success);
+}
+
+.stock-indicator.warning {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: var(--warning);
+}
+
+.stock-indicator.insufficient {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: var(--danger);
+}
+
+/* Estilos para iconos de unidades */
+.unit-icon {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin-left: var(--spacing-xxs);
+}
+
+.unit-icon.liquid {
+  color: var(--info);
+}
+
+.unit-icon.solid {
+  color: var(--warning);
+}
+
+/* Mejoras para la sección de productos en vista detallada */
+.product-conversion-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxs);
+  margin-top: var(--spacing-xs);
+}
+
+.conversion-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xxs) 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.conversion-row:last-child {
+  border-bottom: none;
+}
+
+.conversion-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.conversion-value {
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Diálogo de PDF */
+.fumigation-pdf-dialog {
+  max-width: 900px !important;
+}
+
+.pdf-generator-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+/* Sección de productos en PDF */
+.pdf-products-section {
+  background-color: var(--gray-50);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+}
+
+.pdf-products-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.pdf-product-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm);
+  background-color: var(--bg-paper);
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--gray-200);
+}
+
+/* Sección de imagen del mapa */
+.map-image-section {
+  background-color: var(--gray-50);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+}
+
+.image-upload-area {
+  margin-top: var(--spacing-md);
+}
+
+.upload-dropzone {
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-xxl);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background-color: var(--bg-paper);
+}
+
+.upload-dropzone:hover {
+  border-color: var(--primary);
+  background-color: var(--primary-bg);
+}
+
+.upload-dropzone:active {
+  transform: scale(0.98);
+}
+
+.upload-icon {
+  font-size: 3rem;
+  color: var(--gray-400);
+  margin-bottom: var(--spacing-md);
+}
+
+.upload-dropzone:hover .upload-icon {
+  color: var(--primary);
+}
+
+.upload-text {
+  color: var(--text-secondary);
+}
+
+.upload-text strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  display: block;
+  margin-bottom: var(--spacing-xs);
+}
+
+.upload-text p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+/* Preview de imagen */
+.image-preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.image-preview {
+  border: 1px solid var(--gray-300);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  background-color: var(--bg-paper);
+  box-shadow: var(--shadow-sm);
+}
+
+.image-preview img {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;
+  display: block;
+}
+
+.image-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: center;
+}
+
+/* Preview del PDF */
+.pdf-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.pdf-preview-container {
+  border: 1px solid var(--gray-300);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  background-color: var(--gray-50);
+  position: relative;
+}
+
+.pdf-preview-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.pdf-preview-loading .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--gray-200);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.pdf-preview-loading p {
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  margin: 0;
+}
+
+.pdf-preview-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Botón de PDF en la vista de detalles */
+.pdf-button {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: var(--text-white);
+  border: none;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  box-shadow: var(--shadow-sm);
+}
+
+.pdf-button:hover {
+  background: linear-gradient(135deg, #c0392b, #a93226);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.pdf-button:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.pdf-button i {
+  font-size: var(--font-size-md);
+}
+
+/* Botón de PDF en la lista de fumigaciones */
+.fumigation-actions .pdf-button {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+}
+
+/* Indicador de estado del PDF */
+.pdf-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* Animaciones adicionales */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pdf-preview-container iframe {
+  animation: fadeInScale 0.3s ease-out;
+}
+
+.image-preview img {
+  animation: fadeInScale 0.3s ease-out;
+}
+
+/* Estados de carga específicos */
+.pdf-generating {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.pdf-generating::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  z-index: 1;
+}
+
+.pdf-generating::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--gray-200);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  z-index: 2;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .fumigation-pdf-dialog {
+    width: 95vw;
+    max-width: none !important;
+    height: 90vh;
+    margin: 5vh auto;
+  }
+  
+  .pdf-preview-container {
+    height: 400px;
+  }
+  
+  .pdf-preview-container iframe {
+    height: 400px;
+  }
+  
+  .image-preview img {
+    max-height: 200px;
+  }
+  
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .pdf-preview-actions {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+  
+  .image-actions {
+    flex-direction: column;
+  }
+  
+  .upload-dropzone {
+    padding: var(--spacing-lg);
+  }
+  
+  .upload-icon {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-sm);
+  }
+}
+
+/* Estados específicos para diferentes tipos de fumigación */
+.fumigation-card.ready-for-pdf {
+  border-left: 4px solid var(--success);
+}
+
+.fumigation-card.ready-for-pdf .pdf-button {
+  background: linear-gradient(135deg, #27ae60, #229954);
+}
+
+.fumigation-card.ready-for-pdf .pdf-button:hover {
+  background: linear-gradient(135deg, #229954, #1e8449);
+}
+
+/* Tooltip para botones de PDF */
+.pdf-button-tooltip {
+  position: relative;
+}
+
+.pdf-button-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--gray-900);
+  color: var(--text-white);
+  font-size: var(--font-size-xs);
+  border-radius: var(--border-radius-sm);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-fast);
+  z-index: var(--z-index-tooltip);
+  margin-bottom: var(--spacing-xs);
+}
+
+.pdf-button-tooltip:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Indicadores de calidad de imagen */
+.image-quality-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.image-quality-indicator.good {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: var(--success);
+}
+
+.image-quality-indicator.warning {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: var(--warning);
+}
+
+.image-quality-indicator.poor {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: var(--danger);
+}
+
+/* Estilos Railway específicos */
+.railway-status-section {
+  background-color: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+
+.pdf-status-section {
+  padding: var(--spacing-md);
+  background-color: var(--success-bg);
+  border: 1px solid var(--success);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.pdf-status-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.pdf-status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+}
+
+.pdf-status-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.pdf-status-value {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.pdf-download-section {
+  text-align: center;
+}
+
+.help-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+  font-style: italic;
+}
+
+.railway-test-section {
+  background-color: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  text-align: center;
+}
+
+.railway-test-section .section-title {
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-md);
+  color: var(--text-secondary);
+}
+
+/* Estados mejorados */
+.text-success {
+  color: var(--success) !important;
+}
+
+.text-muted {
+  color: var(--text-secondary) !important;
+}
+
+/* Indicadores de estado en el título */
+.dialog-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.pdf-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.pdf-status-indicator.available {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.pdf-status-indicator.not-available {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: var(--warning);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+/* Mejoras para botones en el footer */
+.dialog-footer .btn {
+  min-width: 120px;
+}
+
+.dialog-footer .btn-primary {
+  background: linear-gradient(135deg, #2196f3, #1976d2);
+}
+
+.dialog-footer .btn-primary:hover {
+  background: linear-gradient(135deg, #1976d2, #1565c0);
+}
+
+.dialog-footer .btn-secondary {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+}
+
+.dialog-footer .btn-secondary:hover {
+  background: linear-gradient(135deg, #f57c00, #ef6c00);
+}
+
+/* Animaciones para carga */
+@keyframes pulse-green {
+  0% { background-color: rgba(76, 175, 80, 0.1); }
+  50% { background-color: rgba(76, 175, 80, 0.2); }
+  100% { background-color: rgba(76, 175, 80, 0.1); }
+}
+
+.pdf-status-section.loading {
+  animation: pulse-green 2s infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pdf-status-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .pdf-status-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+  
+  .btn-download {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
+/* Mejoras de accesibilidad */
+.btn:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.pdf-status-section:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+/* Indicador de tamaño de archivo */
+.file-size-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--gray-100);
+  border-radius: var(--border-radius-sm);
+}
+
+/* Selector de productos mejorado */
+.product-selector-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-index-modal);
+}
+
+.product-selector-content {
+  background-color: var(--bg-paper);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-xl);
+  width: 90vw;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.product-selector-header {
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--gray-200);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.product-selector-header h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  color: var(--text-primary);
+}
+
+.product-selector-body {
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.dose-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.input-group {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.input-group input {
+  flex: 2;
+}
+
+.input-group select {
+  flex: 1;
+}
+
+.total-calculation {
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background-color: var(--primary-bg);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--primary);
+}
+
+/* Vista detallada de fumigación */
+.fumigation-details-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.fumigation-summary {
+  display: flex;
+  flex-direction: column;
+}
+
+.fumigation-summary-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.fumigation-icon-large {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--border-radius-lg);
+  background-color: rgba(0, 150, 136, 0.1);
+  color: #009688;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.fumigation-summary-content {
+  flex: 1;
+}
+
+.fumigation-name {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--spacing-xs) 0;
+  color: var(--text-primary);
+}
+
+.fumigation-field {
+  font-size: var(--font-size-md);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.fumigation-establishment {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.fumigation-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  align-items: center;
+  text-align: center;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-value {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--primary);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: var(--spacing-xxs);
+}
+
+.fumigation-actions-bar {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+  flex-wrap: wrap;
+}
+
+/* Secciones de detalles */
+.detail-section {
+  margin-bottom: var(--spacing-xl);
+  background-color: var(--bg-paper);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxs);
+}
+
+.detail-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.detail-value {
+  font-size: var(--font-size-md);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Tabla de productos */
+.products-table-container {
+  overflow-x: auto;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--gray-200);
+}
+
+.products-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.products-table th {
+  background-color: var(--gray-50);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.products-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--gray-200);
+  vertical-align: middle;
+}
+
+.products-table tr:last-child td {
+  border-bottom: none;
+}
+
+.completion-notes {
+  margin-top: var(--spacing-md);
+}
+
+.completion-notes h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-size-md);
+  color: var(--text-primary);
+}
+
+.completion-notes p {
+  margin: 0;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.notes-content {
+  padding: var(--spacing-sm);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+/* Diálogo de completar fumigación */
+.fumigation-summary-section,
+.products-summary-section {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background-color: var(--gray-50);
+  border-radius: var(--border-radius-md);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxs);
+}
+
+.summary-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.summary-value {
+  font-size: var(--font-size-md);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.products-completion-table {
+  overflow-x: auto;
+}
+
+.completion-products-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+
+.completion-products-table th {
+  background-color: var(--gray-50);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.completion-products-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--gray-200);
+  vertical-align: middle;
+}
+
+.completion-products-table tr:last-child td {
+  border-bottom: none;
+}
+
+.completion-products-table tr.insufficient-stock {
+  background-color: rgba(244, 67, 54, 0.05);
+}
+
+.stock-ok {
+  color: var(--success);
+  font-weight: var(--font-weight-medium);
+}
+
+.stock-insufficient {
+  color: var(--danger);
+  font-weight: var(--font-weight-medium);
+}
+
+.duration-display {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--primary-bg);
+  border-radius: var(--border-radius-md);
+}
+
+.duration-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.duration-value {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--primary);
+}
+
+.form-help-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
+  font-style: italic;
+}
+
+/* Estado vacío */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xxl);
+  text-align: center;
+  background-color: var(--bg-paper);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: var(--gray-300);
+  margin-bottom: var(--spacing-md);
+}
+
+.empty-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.empty-description {
+  font-size: var(--font-size-md);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-lg);
+  max-width: 500px;
+}
+
+/* Estado de carga */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--gray-200);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================
+   CORRECCIÓN Z-INDEX PARA DIÁLOGO PDF
+   ============================================ */
+
+/* Z-index ultra alto para overlay PDF específico */
+.pdf-dialog-overlay {
+  z-index: 999999 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Asegurar que el contenido del diálogo PDF también esté encima */
+.pdf-dialog-overlay .dialog,
+.pdf-dialog-overlay .fumigation-pdf-dialog {
+  z-index: 999999 !important;
+  position: relative !important;
+}
+
+/* Selector ultra específico por si acaso */
+div.dialog-overlay.pdf-dialog-overlay {
+  z-index: 999999 !important;
+}
+
+/* Si está dentro de otro diálogo, forzar aún más */
+.dialog-overlay .pdf-dialog-overlay {
+  z-index: 999999 !important;
+}
+
+/* Override completo para diálogo PDF en portal */
+.pdf-dialog-overlay {
+  z-index: 999999 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Forzar que el diálogo PDF esté visible */
+.pdf-dialog-overlay .dialog.fumigation-pdf-dialog {
+  position: relative !important;
+  z-index: 999999 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: none !important;
+  margin: auto !important;
+  max-width: 900px !important;
+  max-height: 90vh !important;
+  overflow: auto !important;
+}
+
+/* Asegurar que todos los elementos internos sean visibles */
+.pdf-dialog-overlay .dialog.fumigation-pdf-dialog * {
+  visibility: visible !important;
+}
+
+/* Forzar estilos en cualquier condición */
+.pdf-dialog-overlay > div > .dialog.fumigation-pdf-dialog {
+  position: static !important;
+  z-index: auto !important;
+}
