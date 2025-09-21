@@ -1,4 +1,4 @@
-// src/components/panels/Fumigations/FumigationDetailDialog.js - Actualizado
+// src/components/panels/Fumigations/FumigationDetailDialog.js - VERSIÓN FINAL LIMPIA
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import FumigationPDFDialog from './FumigationPDFDialog';
@@ -138,66 +138,7 @@ const FumigationDetailDialog = ({
 
   // Manejar apertura del diálogo PDF
   const handleOpenPDFDialog = () => {
-    console.log('🚀 handleOpenPDFDialog ejecutado');
-    console.log('📋 Estado actual pdfDialogOpen:', pdfDialogOpen);
-    
     setPdfDialogOpen(true);
-    
-    console.log('📋 setPdfDialogOpen(true) ejecutado');
-    
-    // Debug completo del DOM
-    setTimeout(() => {
-      console.log('🔍 === DEBUG DOM DESPUÉS DE 500ms ===');
-      
-      // Buscar todos los overlays
-      const allOverlays = document.querySelectorAll('.dialog-overlay, .pdf-dialog-overlay');
-      console.log(`📊 Total overlays encontrados: ${allOverlays.length}`);
-      
-      allOverlays.forEach((overlay, index) => {
-        const styles = getComputedStyle(overlay);
-        console.log(`📋 Overlay ${index}:`, {
-          className: overlay.className,
-          zIndex: styles.zIndex,
-          position: styles.position,
-          display: styles.display,
-          visibility: styles.visibility,
-          opacity: styles.opacity,
-          top: styles.top,
-          left: styles.left,
-          width: styles.width,
-          height: styles.height
-        });
-      });
-      
-      // Buscar el diálogo PDF específicamente
-      const pdfDialogs = document.querySelectorAll('.fumigation-pdf-dialog');
-      console.log(`📊 PDF Dialogs encontrados: ${pdfDialogs.length}`);
-      
-      pdfDialogs.forEach((dialog, index) => {
-        const styles = getComputedStyle(dialog);
-        console.log(`📋 PDF Dialog ${index}:`, {
-          className: dialog.className,
-          zIndex: styles.zIndex,
-          position: styles.position,
-          display: styles.display,
-          visibility: styles.visibility,
-          opacity: styles.opacity,
-          parent: dialog.parentElement?.className || 'no parent'
-        });
-      });
-      
-      // Verificar si está en document.body
-      const bodyChildren = Array.from(document.body.children);
-      const pdfInBody = bodyChildren.find(child => 
-        child.className && child.className.includes('pdf-dialog-overlay')
-      );
-      
-      console.log('🏠 PDF Dialog está en document.body:', !!pdfInBody);
-      if (pdfInBody) {
-        console.log('🏠 PDF Dialog en body:', pdfInBody);
-      }
-      
-    }, 500);
   };
 
   // Manejar cierre del diálogo PDF
@@ -521,61 +462,19 @@ const FumigationDetailDialog = ({
         </div>
       </div>
 
-      {/* DIÁLOGO PDF CON PORTAL - RENDERIZADO FUERA DEL DOM ACTUAL */}
-      {pdfDialogOpen && createPortal(
-        <div 
-          className="pdf-dialog-overlay" 
-          style={{ 
-            zIndex: 999999, 
-            position: 'fixed', 
-            top: 0, 
-            left: 0, 
-            right: 0, 
-            bottom: 0, 
-            backgroundColor: 'rgba(255,0,0,0.8)', // ROJO PARA DEBUG
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            pointerEvents: 'auto'
-          }}
-          onClick={(e) => {
-            console.log('Click en overlay PDF');
-            e.stopPropagation();
-          }}
-        >
-          <div 
-            style={{ 
-              zIndex: 999999, 
-              position: 'relative',
-              maxHeight: '90vh',
-              overflow: 'auto',
-              backgroundColor: 'white',
-              border: '5px solid blue', // BORDE AZUL PARA DEBUG
-              borderRadius: '10px',
-              padding: '20px'
-            }}
-            onClick={(e) => {
-              console.log('Click en contenido PDF');
-              e.stopPropagation();
-            }}
-          >
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <h2>🐛 DEBUG: Diálogo PDF Visible</h2>
-              <button 
-                onClick={handleClosePDFDialog}
-                style={{ 
-                  padding: '10px 20px', 
-                  backgroundColor: 'red', 
-                  color: 'white', 
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer'
-                }}
-              >
-                CERRAR DEBUG
-              </button>
-            </div>
-            
+      {/* Diálogo PDF */}
+      {pdfDialogOpen && (
+        <div className="pdf-dialog-overlay" style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999999,
+          pointerEvents: 'auto'
+        }}>
+          <div className="pdf-dialog-content" onClick={(e) => e.stopPropagation()}>
             <FumigationPDFDialog
               fumigation={fumigation}
               fields={fields}
@@ -583,8 +482,7 @@ const FumigationDetailDialog = ({
               onClose={handleClosePDFDialog}
             />
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </>
   );

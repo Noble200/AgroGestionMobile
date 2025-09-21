@@ -1,4 +1,4 @@
-// src/components/panels/Fumigations/FumigationPDFDialog.js - ACTUALIZADO con Railway
+// src/components/panels/Fumigations/FumigationPDFDialog.js - VERSIÓN LIMPIA
 import React, { useState, useRef, useEffect } from 'react';
 import { generateFumigationPDF, downloadFumigationPDF } from '../../../utils/fumigationPdfGenerator';
 const RailwayPdfService = require('../../../services/railwayPdfService');
@@ -17,7 +17,6 @@ const FumigationPDFDialog = ({
   const [showPreview, setShowPreview] = useState(false);
   const [pdfExistsInRailway, setPdfExistsInRailway] = useState(false);
   const [railwayPdfMetadata, setRailwayPdfMetadata] = useState(null);
-  const [testingConnection, setTestingConnection] = useState(false);
   const fileInputRef = useRef(null);
 
   // Verificar si existe PDF en Railway al abrir el diálogo
@@ -28,41 +27,18 @@ const FumigationPDFDialog = ({
   // Verificar si existe PDF en Railway
   const checkPdfInRailway = async () => {
     try {
-      console.log('🔍 Verificando PDF existente en Railway para:', fumigation.id);
       const metadata = await RailwayPdfService.getPdfMetadata(fumigation.id);
       
       if (metadata) {
         setPdfExistsInRailway(true);
         setRailwayPdfMetadata(metadata);
-        console.log('✅ PDF encontrado en Railway:', metadata);
       } else {
         setPdfExistsInRailway(false);
         setRailwayPdfMetadata(null);
-        console.log('ℹ️ No hay PDF en Railway para esta fumigación');
       }
     } catch (error) {
-      console.error('❌ Error verificando PDF en Railway:', error);
       setPdfExistsInRailway(false);
       setRailwayPdfMetadata(null);
-    }
-  };
-
-  // Test de conexión a Railway
-  const testRailwayConnection = async () => {
-    try {
-      setTestingConnection(true);
-      const isConnected = await RailwayPdfService.testConnection();
-      
-      if (isConnected) {
-        alert('✅ Conexión a Railway exitosa');
-      } else {
-        alert('❌ Error de conexión a Railway');
-      }
-    } catch (error) {
-      console.error('Error en test de conexión:', error);
-      alert('❌ Error de conexión a Railway: ' + error.message);
-    } finally {
-      setTestingConnection(false);
     }
   };
 
@@ -114,8 +90,7 @@ const FumigationPDFDialog = ({
       setPdfPreview(pdfDataUrl);
       setShowPreview(true);
     } catch (error) {
-      console.error('Error al generar preview:', error);
-      alert('Error al generar el preview del PDF: ' + error.message);
+      alert('Error al generar el preview del PDF');
     } finally {
       setGenerating(false);
     }
@@ -125,7 +100,6 @@ const FumigationPDFDialog = ({
   const handleGenerateAndSavePDF = async () => {
     try {
       setGenerating(true);
-      console.log('🔄 Generando nuevo PDF y guardando en Railway...');
       
       // 1. Generar PDF
       const generator = await generateFumigationPDF(fumigation, products, mapImage);
@@ -133,10 +107,10 @@ const FumigationPDFDialog = ({
       // 2. Guardar PDF localmente
       await downloadFumigationPDF(fumigation, products, mapImage);
       
-      // 3. Convertir PDF a array para Railway (NO usar Buffer en frontend)
+      // 3. Convertir PDF a array para Railway
       const pdfBlob = generator.output('blob');
       const arrayBuffer = await pdfBlob.arrayBuffer();
-      const pdfArray = new Uint8Array(arrayBuffer); // ✅ Usar Uint8Array en lugar de Buffer
+      const pdfArray = new Uint8Array(arrayBuffer);
       
       // 4. Guardar en Railway
       const fumigationData = {
@@ -149,23 +123,20 @@ const FumigationPDFDialog = ({
         surfaceUnit: fumigation.surfaceUnit
       };
       
-      const railwayResult = await RailwayPdfService.savePdf(
+      await RailwayPdfService.savePdf(
         fumigationData, 
-        pdfArray, // ✅ Enviar como array
+        pdfArray, 
         !!mapImage
       );
-      
-      console.log('✅ PDF guardado exitosamente:', railwayResult);
       
       // 5. Actualizar estado
       await checkPdfInRailway();
       
-      alert('✅ PDF generado y guardado exitosamente en local y Railway');
+      alert('PDF generado y guardado exitosamente');
       onClose();
       
     } catch (error) {
-      console.error('❌ Error al generar y guardar PDF:', error);
-      alert('❌ Error al generar el PDF: ' + error.message);
+      alert('Error al generar el PDF: ' + error.message);
     } finally {
       setGenerating(false);
     }
@@ -175,11 +146,10 @@ const FumigationPDFDialog = ({
   const handleDownloadFromRailway = async () => {
     try {
       setDownloading(true);
-      console.log('📥 Descargando PDF desde Railway...');
       
       const result = await RailwayPdfService.downloadPdf(fumigation.id);
       
-      // ✅ Crear blob desde array (no desde Buffer)
+      // Crear blob desde array
       const pdfBlob = new Blob([new Uint8Array(result.pdfBuffer)], { type: 'application/pdf' });
       
       // Crear URL de descarga
@@ -198,12 +168,10 @@ const FumigationPDFDialog = ({
       // Limpiar URL
       window.URL.revokeObjectURL(url);
       
-      console.log('✅ PDF descargado exitosamente desde Railway');
-      alert('✅ PDF descargado exitosamente');
+      alert('PDF descargado exitosamente');
       
     } catch (error) {
-      console.error('❌ Error al descargar PDF desde Railway:', error);
-      alert('❌ Error al descargar PDF: ' + error.message);
+      alert('Error al descargar PDF: ' + error.message);
     } finally {
       setDownloading(false);
     }
@@ -279,7 +247,7 @@ const FumigationPDFDialog = ({
             {pdfExistsInRailway && railwayPdfMetadata && (
               <div className="pdf-status-section">
                 <h3 className="section-title">
-                  <i className="fas fa-cloud"></i> PDF Existente en Railway
+                  <i className="fas fa-cloud"></i> PDF Existente
                 </h3>
                 
                 <div className="pdf-status-info">
@@ -415,8 +383,7 @@ const FumigationPDFDialog = ({
               </h3>
               
               <p className="help-text">
-                Puedes cargar una imagen del mapa de aplicación que se incluirá en el PDF. 
-                La imagen será usada solo para este PDF y no se guardará en la base de datos.
+                Puedes cargar una imagen del mapa de aplicación que se incluirá en el PDF.
               </p>
               
               {!imagePreview ? (
@@ -449,30 +416,6 @@ const FumigationPDFDialog = ({
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Sección de test de conexión */}
-            <div className="railway-test-section">
-              <h3 className="section-title">
-                <i className="fas fa-database"></i> Estado de Railway
-              </h3>
-              
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={testRailwayConnection}
-                disabled={testingConnection}
-              >
-                {testingConnection ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm mr-2"></span>
-                    Probando...
-                  </>
-                ) : (
-                  <>
-                    <i className="fas fa-network-wired"></i> Probar conexión Railway
-                  </>
-                )}
-              </button>
             </div>
           </div>
         ) : (
